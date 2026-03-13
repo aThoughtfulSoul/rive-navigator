@@ -111,17 +111,13 @@ gcloud run deploy rive-navigator \
   --set-env-vars "GOOGLE_API_KEY=YOUR_API_KEY"
 ```
 
-The current deployed service URL is:
-
-`https://rive-navigator-443266620050.us-central1.run.app`
-
 The extension defaults to `http://localhost:8000` for local development. To use the deployed backend instead:
 
 1. Open `chrome://extensions`
 2. Find `Rive UI Navigator`
 3. Open `Details`
 4. Open `Extension options`
-5. Set `Backend API URL` to the deployed Cloud Run URL
+5. Set `Backend API URL` to your deployed Cloud Run URL
 
 ## Judge Setup
 
@@ -129,7 +125,7 @@ For judges or reviewers reproducing the project:
 
 1. Load the unpacked extension from `chrome-extension/`
 2. Open the extension options page
-3. Set `Backend API URL` to the deployed Cloud Run backend URL provided above
+3. Set `Backend API URL` to the Cloud Run backend URL provided in the submission materials
 4. Open the Rive editor in Chrome
 5. Launch the side panel and test chat, guidance, or agentic tasks
 
@@ -165,4 +161,3 @@ This file is intended to be included in the submission materials and image carou
 
 - Setup guide: [SETUP.md](/Users/devonbulgin/Documents/ForClaude/GeminiHackathon/rive-navigator/SETUP.md)
 - Architecture doc: [rive-navigator-architecture.html](/Users/devonbulgin/Documents/ForClaude/GeminiHackathon/rive-navigator/rive-navigator-architecture.html)
-
