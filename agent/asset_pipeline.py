@@ -5,6 +5,7 @@ Preview-generation and raster-to-SVG pipeline for generated assets.
 from __future__ import annotations
 
 import base64
+from collections import Counter, deque
 import importlib.util
 import json
 import mimetypes
@@ -17,7 +18,7 @@ from typing import Any
 
 from google.genai import types
 
-from .svg_sanitizer import SvgSanitizationError, sanitize_svg_document
+from .svg_sanitizer import sanitize_svg_document
 
 
 DEFAULT_LOCAL_ASSET_ROOT = Path(__file__).parent.parent / "generated_assets"
@@ -29,12 +30,30 @@ ASSET_ROOT = Path(
 )
 DEFAULT_ASSET_PREVIEW_MODEL = os.getenv("ASSET_PREVIEW_MODEL", "gemini-3-pro-image-preview")
 STYLE_PRESETS = {
-    "sticker": "flat sticker-style vector illustration, isolated subject, clean silhouette, minimal shading, plain background",
-    "icon": "clean flat app icon, simple geometry, isolated symbol, minimal detail, plain background",
-    "mascot": "simple vector mascot, bold silhouette, separated color regions, minimal shading, plain background",
-    "logo": "simple vector logo mark, crisp shapes, minimal detail, plain background",
+    "sticker": (
+        "flat sticker-style vector illustration, isolated subject, clean silhouette, minimal shading, "
+        "single solid background color, no backdrop"
+    ),
+    "icon": (
+        "clean flat app icon, simple geometry, isolated symbol, minimal detail, "
+        "single solid background color, no backdrop"
+    ),
+    "mascot": (
+        "simple vector mascot, bold silhouette, separated color regions, minimal shading, "
+        "single solid background color, no backdrop"
+    ),
+    "logo": (
+        "simple vector logo mark, crisp shapes, minimal detail, "
+        "single solid background color, no backdrop"
+    ),
 }
 MAX_PREVIEW_BYTES = 8_000_000
+BACKGROUND_BUCKET_SIZE = 16
+BACKGROUND_COLOR_TOLERANCE = 40
+BACKGROUND_OPAQUE_ALPHA = 224
+BACKGROUND_EDGE_RATIO_THRESHOLD = 0.55
+BACKGROUND_CORNER_MATCH_THRESHOLD = 3
+MIN_BACKGROUND_REMOVAL_RATIO = 0.04
 
 
 class AssetPipelineError(RuntimeError):
@@ -114,8 +133,9 @@ def vectorize_asset(asset_id: str) -> dict[str, Any]:
     if not preview_path.exists():
         raise AssetPipelineError("The generated preview file could not be found.")
 
+    trace_input_path, trace_cleanup = _prepare_trace_input(preview_path, asset_dir)
     raw_svg_path = asset_dir / "vectorized.svg"
-    _run_vectorizer(preview_path, raw_svg_path)
+    _run_vectorizer(trace_input_path, raw_svg_path)
 
     raw_svg = raw_svg_path.read_text(encoding="utf-8", errors="ignore")
     sanitized_svg, stats = sanitize_svg_document(raw_svg)
@@ -124,6 +144,7 @@ def vectorize_asset(asset_id: str) -> dict[str, Any]:
 
     metadata["vectorized_filename"] = raw_svg_path.name
     metadata["sanitized_filename"] = sanitized_path.name
+    metadata["trace_cleanup"] = trace_cleanup
     metadata["stats"] = stats
     _write_metadata(asset_dir, metadata)
 
@@ -131,6 +152,7 @@ def vectorize_asset(asset_id: str) -> dict[str, Any]:
         "asset_id": asset_id,
         "sanitized_svg": sanitized_svg,
         "stats": stats,
+        "trace_cleanup": trace_cleanup,
     }
 
 
@@ -146,6 +168,9 @@ def _build_generation_prompt(prompt: str, style: str) -> str:
         "- no text or typography\n"
         "- no photorealism\n"
         "- no background scene\n"
+        "- use one flat solid background color only, with no gradient, texture, or scene\n"
+        "- keep the subject fully separated from the edges so the background can be removed cleanly\n"
+        "- no floor, shadow plate, border card, or framing device around the subject\n"
         "- keep details minimal so tracing remains clean\n"
         "- aim for large color regions that can become vector paths"
     )
@@ -265,6 +290,206 @@ def _vectorize_with_cli(input_path: Path, output_path: Path) -> bool:
             completed.stderr.strip() or "The vectorizer failed while tracing the preview image."
         )
     return output_path.exists()
+
+
+def _prepare_trace_input(preview_path: Path, asset_dir: Path) -> tuple[Path, dict[str, Any]]:
+    cleanup: dict[str, Any] = {
+        "used_cleaned_preview": False,
+        "background_removed": False,
+        "reason": "not_needed",
+        "trace_input_filename": preview_path.name,
+    }
+
+    image_module = _load_pillow_image_module()
+    if image_module is None:
+        cleanup["reason"] = "pillow_not_installed"
+        return preview_path, cleanup
+
+    try:
+        image = image_module.open(preview_path).convert("RGBA")
+    except Exception:
+        cleanup["reason"] = "preview_unreadable"
+        return preview_path, cleanup
+
+    detection = _detect_edge_background(image)
+    cleanup.update(
+        {
+            "edge_background_ratio": detection["ratio"],
+            "corner_matches": detection["corner_matches"],
+            "candidate_color": list(detection["color"]) if detection["color"] else None,
+        }
+    )
+    if not detection["should_remove"] or detection["color"] is None:
+        cleanup["reason"] = "background_not_detected"
+        return preview_path, cleanup
+
+    cleaned_image, removed_pixels = _erase_edge_connected_background(
+        image=image,
+        target_color=detection["color"],
+        tolerance=BACKGROUND_COLOR_TOLERANCE,
+    )
+    removed_ratio = removed_pixels / max(1, image.width * image.height)
+    cleanup["removed_pixel_ratio"] = round(removed_ratio, 4)
+    if removed_pixels <= 0 or removed_ratio < MIN_BACKGROUND_REMOVAL_RATIO:
+        cleanup["reason"] = "background_not_detected"
+        return preview_path, cleanup
+
+    if cleaned_image.getchannel("A").getbbox() is None:
+        cleanup["reason"] = "cleanup_removed_everything"
+        return preview_path, cleanup
+
+    cleaned_path = asset_dir / "preview_trace.png"
+    cleaned_image.save(cleaned_path)
+    cleanup.update(
+        {
+            "used_cleaned_preview": True,
+            "background_removed": True,
+            "reason": "background_removed",
+            "trace_input_filename": cleaned_path.name,
+        }
+    )
+    return cleaned_path, cleanup
+
+
+def _load_pillow_image_module():
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+    return Image
+
+
+def _detect_edge_background(image) -> dict[str, Any]:
+    edge_pixels: list[tuple[int, int, int]] = []
+    bucket_counts: Counter[tuple[int, int, int]] = Counter()
+    bucket_pixels: dict[tuple[int, int, int], list[tuple[int, int, int]]] = {}
+    pixels = image.load()
+
+    for x, y in _iter_border_points(image.width, image.height):
+        red, green, blue, alpha = pixels[x, y]
+        if alpha < BACKGROUND_OPAQUE_ALPHA:
+            continue
+        rgb = (red, green, blue)
+        edge_pixels.append(rgb)
+        bucket = _bucketize_color(rgb)
+        bucket_counts[bucket] += 1
+        bucket_pixels.setdefault(bucket, []).append(rgb)
+
+    if not edge_pixels or not bucket_counts:
+        return {"should_remove": False, "ratio": 0.0, "corner_matches": 0, "color": None}
+
+    dominant_bucket, dominant_count = bucket_counts.most_common(1)[0]
+    dominant_pixels = bucket_pixels[dominant_bucket]
+    candidate_color = tuple(
+        round(sum(pixel[index] for pixel in dominant_pixels) / len(dominant_pixels))
+        for index in range(3)
+    )
+    dominant_ratio = dominant_count / len(edge_pixels)
+
+    corner_matches = sum(
+        1
+        for x, y in _corner_points(image.width, image.height)
+        if pixels[x, y][3] >= BACKGROUND_OPAQUE_ALPHA
+        and _rgb_close(pixels[x, y][:3], candidate_color, BACKGROUND_COLOR_TOLERANCE)
+    )
+    should_remove = dominant_ratio >= BACKGROUND_EDGE_RATIO_THRESHOLD and (
+        corner_matches >= BACKGROUND_CORNER_MATCH_THRESHOLD or dominant_ratio >= 0.72
+    )
+    return {
+        "should_remove": should_remove,
+        "ratio": round(dominant_ratio, 4),
+        "corner_matches": corner_matches,
+        "color": candidate_color,
+    }
+
+
+def _erase_edge_connected_background(
+    image,
+    target_color: tuple[int, int, int],
+    tolerance: int,
+):
+    pixels = image.load()
+    width, height = image.size
+    visited = bytearray(width * height)
+    queue: deque[tuple[int, int]] = deque()
+
+    def enqueue(x: int, y: int) -> None:
+        index = y * width + x
+        if visited[index]:
+            return
+        visited[index] = 1
+        if pixels[x, y][3] < 8:
+            return
+        if not _rgb_close(pixels[x, y][:3], target_color, tolerance):
+            return
+        queue.append((x, y))
+
+    for x, y in _iter_border_points(width, height):
+        enqueue(x, y)
+
+    removed_pixels = 0
+    while queue:
+        x, y = queue.popleft()
+        red, green, blue, _ = pixels[x, y]
+        pixels[x, y] = (red, green, blue, 0)
+        removed_pixels += 1
+
+        if x > 0:
+            enqueue(x - 1, y)
+        if x + 1 < width:
+            enqueue(x + 1, y)
+        if y > 0:
+            enqueue(x, y - 1)
+        if y + 1 < height:
+            enqueue(x, y + 1)
+
+    return image, removed_pixels
+
+
+def _bucketize_color(color: tuple[int, int, int]) -> tuple[int, int, int]:
+    return tuple(component // BACKGROUND_BUCKET_SIZE for component in color)
+
+
+def _rgb_close(left: tuple[int, int, int], right: tuple[int, int, int], tolerance: int) -> bool:
+    return all(abs(left[index] - right[index]) <= tolerance for index in range(3))
+
+
+def _iter_border_points(width: int, height: int):
+    if width <= 0 or height <= 0:
+        return
+
+    seen: set[tuple[int, int]] = set()
+    for x in range(width):
+        point = (x, 0)
+        if point not in seen:
+            seen.add(point)
+            yield point
+        if height > 1:
+            point = (x, height - 1)
+            if point not in seen:
+                seen.add(point)
+                yield point
+    for y in range(height):
+        point = (0, y)
+        if point not in seen:
+            seen.add(point)
+            yield point
+        if width > 1:
+            point = (width - 1, y)
+            if point not in seen:
+                seen.add(point)
+                yield point
+
+
+def _corner_points(width: int, height: int) -> list[tuple[int, int]]:
+    if width <= 0 or height <= 0:
+        return []
+    return [
+        (0, 0),
+        (max(0, width - 1), 0),
+        (0, max(0, height - 1)),
+        (max(0, width - 1), max(0, height - 1)),
+    ]
 
 
 def _asset_dir(asset_id: str) -> Path:
