@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rive Navigator</title>
+  <link rel="stylesheet" href="sidebar-glass.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-logo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+          <path d="M2 17l10 5 10-5"/>
+          <path d="M2 12l10 5 10-5"/>
+        </svg>
+        <span class="header-title">Rive Navigator</span>
+      </div>
+      <div class="header-status" id="connectionStatus">
+        <span class="status-dot"></span>
+        <span class="status-text">Ready</span>
+      </div>
+    </header>
+
+    <!-- Settings Bar -->
+    <div class="settings-bar">
+      <label class="setting-item">
+        <input type="checkbox" id="proModel">
+        <span>Gemini 3.1 Pro</span>
+      </label>
+      <label class="setting-item">
+        <input type="checkbox" id="audioNarration">
+        <span>🔊 Narrate</span>
+      </label>
+      <div class="mode-toggle-wrap settings-mode-toggle" title="Switch between Collaborative and Agentic task execution">
+        <span class="mode-label" id="modeLabel">Collaborative</span>
+        <label class="mode-toggle">
+          <input type="checkbox" id="modeToggle">
+          <span class="mode-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Task Progress Bar (hidden until task starts) -->
+    <div class="task-bar" id="taskBar" style="display: none;">
+      <div class="task-header">
+        <div class="task-info">
+          <span class="task-mode-badge">TASK MODE</span>
+          <span class="task-name" id="taskName"></span>
+        </div>
+        <button class="task-end-btn" id="taskEndBtn" title="End task">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="task-progress">
+        <div class="task-progress-bar">
+          <div class="task-progress-fill" id="taskProgressFill"></div>
+        </div>
+        <span class="task-progress-text" id="taskProgressText">Step 1/6</span>
+      </div>
+      <div class="task-current-step" id="taskCurrentStep"></div>
+
+      <!-- Execution Status (agentic mode) -->
+      <div class="execution-status" id="executionStatus" style="display: none;">
+        <span class="exec-dot"></span>
+        <span class="exec-text" id="executionText">Ready</span>
+        <button class="exec-pause-btn" id="pauseBtn">Pause</button>
+      </div>
+
+      <!-- Collaborative controls -->
+      <div class="task-controls" id="collabControls">
+        <button class="task-ctrl-btn" id="taskBackBtn" title="Previous step">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+          Back
+        </button>
+        <button class="task-ctrl-btn task-ctrl-primary" id="taskDoneBtn">
+          Done with step
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </button>
+        <button class="task-ctrl-btn" id="taskSkipBtn" title="Skip step">
+          Skip
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Chat Messages -->
+    <div class="chat-container" id="chatContainer">
+      <div class="welcome-message">
+        <div class="welcome-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+            <line x1="9" y1="9" x2="9.01" y2="9"/>
+            <line x1="15" y1="9" x2="15.01" y2="9"/>
+          </svg>
+        </div>
+        <h2>Hey! I'm your Rive Navigator</h2>
+        <p>Ask me anything about the Rive editor. I can see your screen and guide you — or take the wheel and build for you.</p>
+        <p class="quick-actions-label">Ask a question:</p>
+        <div class="quick-actions">
+          <button class="quick-action" data-prompt="What am I looking at? Describe the current state of my editor.">
+            What's on screen?
+          </button>
+          <button class="quick-action" data-prompt="How do I create a state machine for this animation?">
+            State machines
+          </button>
+        </div>
+        <p class="quick-actions-label">Start a guided task:</p>
+        <div class="quick-actions">
+          <button class="quick-action task-prompt" data-prompt="Walk me through building an animated toggle switch step by step.">
+            Build a toggle switch
+          </button>
+          <button class="quick-action task-prompt" data-prompt="Guide me through creating a loading spinner animation step by step.">
+            Loading spinner
+          </button>
+          <button class="quick-action task-prompt" data-prompt="Help me build an interactive button with hover and press states step by step.">
+            Interactive button
+          </button>
+          <button class="quick-action task-prompt" data-prompt="Walk me through rigging a character with bones for animation step by step.">
+            Rig a character
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Input Area -->
+    <div class="input-area">
+      <div class="asset-panel" id="assetPanel" style="display: none;">
+        <div class="asset-panel-header">
+          <div>
+            <div class="asset-panel-title">Nano Banana SVG Generator</div>
+            <div class="asset-panel-subtitle">Create a flat vector-style preview, then paste a traced SVG into Rive.</div>
+          </div>
+          <button class="asset-panel-close" id="assetCloseBtn" title="Close asset generator">&times;</button>
+        </div>
+
+        <textarea
+          id="assetPromptInput"
+          class="asset-prompt-input"
+          placeholder="Describe a simple asset to generate, like 'cute blue robot head sticker' or 'sunny weather icon with clouds'."
+          rows="2"
+        ></textarea>
+
+        <div class="asset-panel-controls">
+          <label class="asset-style-field">
+            <span>Style</span>
+            <select id="assetStyleSelect">
+              <option value="sticker">Sticker</option>
+              <option value="icon">Icon</option>
+              <option value="mascot">Mascot</option>
+              <option value="logo">Logo</option>
+            </select>
+          </label>
+          <button class="asset-primary-btn" id="assetGenerateBtn">Generate Preview</button>
+        </div>
+
+        <div class="asset-status" id="assetStatus"></div>
+
+        <div class="asset-preview" id="assetPreview" style="display: none;">
+          <img id="assetPreviewImage" alt="Generated asset preview">
+          <div class="asset-preview-actions">
+            <button class="asset-secondary-btn" id="assetRegenerateBtn">Regenerate</button>
+            <button class="asset-primary-btn" id="assetUseBtn">Use This in Rive</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="screenshot-preview" id="screenshotPreview" style="display: none;">
+        <img id="previewImage" alt="Screenshot preview">
+        <button class="preview-close" id="closePreview">&times;</button>
+      </div>
+      <div class="input-row">
+        <button class="btn-asset" id="assetBtn" title="Open Nano Banana SVG Generator">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#facc15" stroke-width="2">
+            <path d="M7.5 5.5c.7 4.6 3 8 6.7 10.1c2 1.1 4.1 1.5 5.8 1.2c-.9 1.8-2.9 2.9-5.4 2.9c-5.2 0-9.6-5.1-9.6-10.9c0-1.2.2-2.3.7-3.3c.3-.7 1-1.1 1.8-1z"/>
+            <path d="M16.8 5.8c1.3-.1 2.5-.8 3.2-1.8"/>
+          </svg>
+        </button>
+        <button class="btn-capture" id="captureBtn" title="Capture screenshot (Ctrl+Shift+S)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+        <textarea
+          id="messageInput"
+          placeholder="Ask about Rive..."
+          rows="1"
+          autofocus
+        ></textarea>
+        <button class="btn-mic" id="micBtn" title="Voice input">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8" y1="23" x2="16" y2="23"/>
+          </svg>
+        </button>
+        <button class="btn-send" id="sendBtn" title="Send message">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="22" y1="2" x2="11" y2="13"/>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
+      </div>
+      <div class="input-hint">
+        <kbd>Ctrl+Shift+S</kbd> capture &middot; <kbd>Enter</kbd> send &middot; <kbd>Shift+Enter</kbd> new line
+      </div>
+    </div>
+  </div>
+
+  <script src="sidebar.js"></script>
+</body>
+</html>

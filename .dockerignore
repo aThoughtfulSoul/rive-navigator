@@ -1,0 +1,11 @@
+.git
+.gitignore
+.DS_Store
+venv/
+__pycache__/
+**/__pycache__/
+debug_screenshots/
+generated_assets/
+chrome-extension/
+rive-navigator-architecture.html
+*.pyc

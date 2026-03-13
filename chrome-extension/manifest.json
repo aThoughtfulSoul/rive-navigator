@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "Rive UI Navigator",
+  "version": "1.0.0",
+  "description": "AI copilot for Rive that sees the editor, guides tasks, automates actions, and imports prompt-generated SVG assets.",
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "sidePanel",
+    "debugger",
+    "clipboardWrite",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://rive.app/*",
+    "https://editor.rive.app/*",
+    "<all_urls>"
+  ],
+  "side_panel": {
+    "default_path": "sidebar/sidebar.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://rive.app/*",
+        "https://editor.rive.app/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Open Rive Navigator",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

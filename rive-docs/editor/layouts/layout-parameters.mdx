@@ -1,0 +1,118 @@
+---
+title: 'Parameters'
+description: 'Layout parameters can broadly be grouped into one of two categories — those that affect the parent layout, and those that affect the child layouts.'
+---
+
+import { YouTube } from '/snippets/youtube.mdx'
+
+<Tip>In Rive, it's important to remember that layout parameters generally only affect other layout containers. This can often result in the nesting of layouts for desired results, but unlocks opportunities to blend with Rive's more freeform canvas in creative ways.</Tip>
+
+---
+
+## Absolute vs Relative
+
+To control the flow of child Layouts in a Row or Column requires the Layout children to be Relative, i.e. not have their Absolute position option enabled. Use the icon in the top right of the Layout inspector to toggle between an Absolute and Relative Layout.
+
+![Image](/images/editor/layouts/3412f52f-c283-4617-b6c5-f5af8ad1ddcc.webp)
+
+- **Absolute:** An Absolute Layout positions itself within an artboard or parent Layout container. It can have 2 or more of it’s edges pinned to the container.
+- **Relative:** A Relative Layout has it’s position defined by the parent artboard or Layout. Changing the flex properties on the parent will determine the child layout behaviour.
+
+## Scale Types
+
+A layout’s width and height can make use of 3 different scale behaviours:
+
+- **Fixed:** A fixed width or height for the Layout. The defined value can be either a point or percentage value. Use the unit toggle within the fields to toggle between value types.
+- **Hug:** The width and/or height of the Layout shrinks to fit its children. For example, you may want a Layout to hug a text object; resizing itself based on the length of the text inside.
+- **Fill:** The width and/or height of the Layout expands to fill the available space within the parent Layout or artboard. The fill option switches the width/height fields to be represented in `fr` (fill ratio) units and reveals a base size field. The fill ratio values make it possible to control the fill behaviour between a number of children with the fill scale behaviour. For example, you may want the children to fill the available space equally, or perhaps have one child scale at a greater factor than the rest.
+
+Options to set the scale type are below the width and height fields in the inspector.
+
+![Image](/images/editor/layouts/083d008d-6a87-4988-bd2f-5d14ce367217.webp)
+
+<Info>Hug and Fill options will only surface when applicable. For example, a Layout without any children won’t surface the option to hug, while only a Layout with another Layout as its parent can be set to Fill.</Info>
+
+<YouTube id="eOGfPV7zBbQ" />
+
+## Size constraints
+
+Use the icon above the absolute toggle to add minimum and/or maximum width and height values. As with the width and height values themselves, these can be defined as either points or percentages.
+
+![Image](/images/editor/layouts/d6898bfa-62bf-4d4c-9769-5c68d439e03a.webp)
+
+## Clip
+
+The clip toggle hides any child elements within the layout that extend beyond the bounds of the Layout.
+
+![Image](/images/editor/layouts/80299f91-7525-42cc-ba64-20ca7ea7e5ad.webp)
+
+## Position (Absolute Layouts only)
+
+Absolute Layouts provide additional options to set their position within the artboard or parent Layout. The position is defined by at least 2 pinned edges — one horizontal and one vertical, however additional edges can also be enabled.
+
+Set the desired edges to pin by selecting the markers within the inspector graphic, or via the fields below. You can hold `shift` while selecting a marker to add a second edge along the same axis. The distance values from a chosen edge can be provided as points or percentages by selecting the chosen unit type within the field.
+
+![Image](/images/editor/layouts/987f6999-4db4-487e-a8f0-c8760b037012.webp)
+
+## Padding and Margin
+
+<Info>Padding ONLY affects Layout children. For example if you want to have a button with a label, the text should be wrapped in a Layout and that Layout should be the child of another Layout that applies the padding.</Info>
+
+<Info>Margin affects the Layout to which the margin is applied relative to its parent Layout.</Info>
+
+Padding and margin can be applied symmetrically along an axis, or to individual edges. Use the edge toggle to reveal fields for each edge plus options to use point or percent values.
+
+- **Padding:** Inner space between the Layout bounds and any relative Layout children.
+- **Margin:** Outer space between the Layout bounds and a relative parent Layout.
+
+<video width="640" controls>
+  <source src="https://ucarecdn.com/a489bd85-d55b-424b-8f7a-1a1a7aab37f6/" type="video/mp4"></source>
+  Padding and Margin
+</video>
+
+---
+
+## Layout Children
+
+<Note>A layout’s flex parameters are only applied to other layouts contained within it. In order to generate rows, columns, and grids of content that reflow, content items must themselves be wrapped in an additional layout container.</Note>
+
+## Row/Column
+
+- **Row:** Lay out children along the horizontal axis.
+- **Column:** Layout children along the vertical axis.
+- **Row Reverse:** Lay out children horizontally, in reverse order.
+- **Column Reverse:** Lay out children vertically, in reverse order.
+
+![Image](/images/editor/layouts/c64d65de-0d9e-4325-a1b3-ef7d3310c842.webp)
+
+## Wrap
+
+- **No Wrap:** When the content reaches the bounds of the layout, continue to extend beyond it.
+- **Wrap:** When the content reached the bounds of the layout, place the next item on below or alongside the currently row/column.
+- **Wrap Reverse:** Same as wrap, but display the content in reverse order.
+
+![Image](/images/editor/layouts/87c797aa-bce4-4e39-b649-63bd382ffb69.webp)
+
+## Alignment
+
+Select the desired point on the inspector widget to align content within a layout container.
+
+![Image](/images/editor/layouts/3018db3d-fb86-4a24-9d67-8c16ac6270bd.webp)
+
+## Justify
+
+Click on the current alignment position to expand the content to fill the available space. Selecting the one of the active tiles again collapses the content back down.
+
+![Image](https://ucarecdn.com/d79e6712-f751-4526-951a-0408f9fca6c0/)
+
+## Gap
+
+Spacing between content (gaps) can be set both horizontally and vertically, and as either points or percentages of the container width/height.
+
+![Image](/images/editor/layouts/84dba879-e23b-4144-963a-3d4e5f50a144.webp)
+
+## Left-to-Right/Right-to-Left
+
+<YouTube id="oLjFOu-UFxM" />
+
+Determines the horizontal direction for this Layout and will also be cascaded down to its child Layouts (when its child Layouts are set to Inherit). This will change the direction of Row based Layouts as well as Text alignment within any Layouts. This is useful when there is a requirement to support Right-to-Left languages.

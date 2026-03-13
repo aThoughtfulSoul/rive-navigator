@@ -1,0 +1,54 @@
+---
+title: 'Data Binding'
+description: 'Binding Rive Data to Unity and vice versa'
+---
+
+import LegacyApiNotice from '/snippets/unity/legacy-api-notice.mdx';
+import { Demos } from '/snippets/demos.jsx'
+
+
+Data binding allows you to establish connections between your Unity code and your Rive graphics. This creates a two-way reactive system where changes in your code affect the Rive design, and changes in the design can trigger responses in your code.
+
+<Demos examples={['dataBindingQuickStart']} runtime="unity" />
+
+<Tabs>
+  <Tab title="Component API (Recommended)">
+## Auto Binding in the Inspector
+
+The simplest way to use data binding is through the Unity Inspector. The **Rive Widget** component includes a **Data Binding Mode** setting that offers three options:
+
+![Data Binding Mode dropdown in Unity Inspector showing Auto Bind options](/images/unity/widget-db-binding-mode-dropdown.jpg)
+
+- **Auto Bind Default**: Automatically binds the default view model instance (marked as "Default" in the Rive editor)
+- **Auto Bind Selected**: Lets you select a specific instance from a dropdown
+- **Manual**: Requires you to set up binding through code (see the [Data Binding documentation](/runtimes/data-binding#binding) for details)
+
+
+## Working with Data Binding
+
+Once your **Rive Widget** is bound to a view model instance, you can access and modify its properties from your C# scripts.
+
+For the full data binding API (including detailed ViewModel property types, lists, and artboard binding), see the runtime data binding documentation:
+
+<CardGroup cols={1}>
+  <Card title="Data Binding Fundamentals" href="/runtimes/data-binding">
+    View model concepts, property types, lists, artboards, and runtime examples across platforms.
+  </Card>
+</CardGroup>
+
+Explore the **RewardsDataBinding** scene in the [getting-started example project](https://github.com/rive-app/rive-unity-examples) for a practical implementation in Unity.
+
+</Tab>
+<Tab title="Legacy API">
+
+<LegacyApiNotice />
+
+ If you choose to use the low-level API to control the render loop, you'll need to manually set up data binding in your scripts.
+
+ For reference, check this [RiveScreen example](https://github.com/rive-app/rive-unity/blob/main/examples/basic/Assets/GameRuntime/RiveScreen.cs) that demonstrates one way to implement auto binding in a custom render loop.
+
+<Note>
+Using the low-level API requires additional implementation effort and understanding of the Rive runtime. Unless you have a specific need to setup a custom render loop, we recommend using the Component API.
+</Note>
+</Tab>
+</Tabs>

@@ -1,0 +1,24 @@
+---
+title: ImageFilter
+---
+
+Defines how image sampling is performed when scaling or transforming the
+image.
+* `bilinear`
+* `nearest`
+
+See [ImageSampler](/scripting/api-reference/image/image-sampler) for usage.
+```lua highlight={6}
+function init(self: DrawImage, context: Context): boolean
+  self.myImage = context:image('myImage')
+  self.sampler = ImageSampler(
+    'clamp',
+    'clamp',
+    'bilinear'
+  )
+
+  return true
+end
+```
+
+

@@ -1,0 +1,1302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rive Navigator &mdash; Architecture</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&amp;family=DM+Sans:wght@300;400;500;600;700&amp;family=IBM+Plex+Mono:wght@300;400;500;600&amp;display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-deep: #08080c;
+      --bg-surface: #111118;
+      --bg-card: #16161f;
+      --bg-elevated: #1c1c28;
+      --gold: #c9a227;
+      --gold-light: #e8c547;
+      --gold-dim: #8a7020;
+      --gold-glow: rgba(201, 162, 39, 0.12);
+      --teal: #2dd4bf;
+      --teal-dim: #0d9488;
+      --coral: #f07171;
+      --coral-dim: #b84d4d;
+      --sky: #7aa2f7;
+      --lavender: #bb9af7;
+      --text-primary: #ede6d6;
+      --text-secondary: #a89f8f;
+      --text-muted: #6b6560;
+      --text-faint: #3d3a36;
+      --border: #2a2a35;
+      --border-subtle: #1e1e28;
+      --font-display: 'Playfair Display', Georgia, serif;
+      --font-body: 'DM Sans', system-ui, sans-serif;
+      --font-mono: 'IBM Plex Mono', 'SF Mono', monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      line-height: 1.7;
+      overflow-x: hidden;
+    }
+
+    /* Blueprint grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        linear-gradient(var(--border-subtle) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px);
+      background-size: 60px 60px;
+      opacity: 0.3;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Grain overlay */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      opacity: 0.025;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .page-wrapper {
+      position: relative;
+      z-index: 2;
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0 40px;
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-deep); }
+    ::-webkit-scrollbar-thumb { background: var(--gold-dim); border-radius: 3px; }
+
+    /* ========== HEADER ========== */
+    .hero {
+      padding: 100px 0 80px;
+      position: relative;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: 40px;
+      left: -40px;
+      width: 1px;
+      height: calc(100% - 60px);
+      background: linear-gradient(to bottom, transparent, var(--gold), transparent);
+    }
+    .hero-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .hero-eyebrow::before {
+      content: '';
+      width: 40px;
+      height: 1px;
+      background: var(--gold);
+    }
+    .hero h1 {
+      font-family: var(--font-display);
+      font-size: clamp(48px, 7vw, 80px);
+      font-weight: 900;
+      line-height: 1.0;
+      letter-spacing: -2px;
+      color: var(--text-primary);
+      margin-bottom: 28px;
+    }
+    .hero h1 em {
+      font-style: italic;
+      font-weight: 400;
+      color: var(--gold);
+    }
+    .hero-desc {
+      font-size: 17px;
+      font-weight: 300;
+      color: var(--text-secondary);
+      max-width: 640px;
+      line-height: 1.8;
+    }
+    .hero-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 36px;
+    }
+    .hero-tag {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      padding: 6px 14px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      transition: all 0.3s ease;
+    }
+    .hero-tag:hover {
+      border-color: var(--gold-dim);
+      color: var(--gold);
+    }
+
+    /* ========== SECTIONS ========== */
+    .section {
+      padding: 80px 0;
+      border-top: 1px solid var(--border-subtle);
+      position: relative;
+    }
+    .section-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--gold-dim);
+      margin-bottom: 12px;
+    }
+    .section-title {
+      font-family: var(--font-display);
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 40px;
+      letter-spacing: -0.5px;
+    }
+
+    /* ========== CONTEXT GRID ========== */
+    .context-grid {
+      display: grid;
+      grid-template-columns: 1fr 1px 1fr;
+      gap: 0 48px;
+    }
+    .context-divider {
+      background: linear-gradient(to bottom, transparent, var(--border), transparent);
+    }
+    .context-block h3 {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--gold);
+      margin-bottom: 12px;
+      margin-top: 28px;
+    }
+    .context-block h3:first-child { margin-top: 0; }
+    .context-block p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      font-weight: 300;
+    }
+    .context-block ul {
+      list-style: none;
+      padding: 0;
+    }
+    .context-block li {
+      font-size: 14px;
+      color: var(--text-secondary);
+      font-weight: 300;
+      padding: 6px 0;
+      padding-left: 20px;
+      position: relative;
+    }
+    .context-block li::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 14px;
+      width: 6px;
+      height: 6px;
+      border: 1px solid var(--gold-dim);
+      transform: rotate(45deg);
+    }
+
+    /* ========== TECH STACK ========== */
+    .stack-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .stack-chip {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 400;
+      padding: 7px 16px;
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      background: var(--bg-surface);
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .stack-chip::before {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      transform: scaleX(0);
+      transition: transform 0.3s ease;
+    }
+    .stack-chip:hover { color: var(--text-primary); border-color: var(--border); }
+    .stack-chip:hover::before { transform: scaleX(1); }
+    .stack-chip.cat-python::before { background: var(--sky); }
+    .stack-chip.cat-ai::before { background: var(--gold); }
+    .stack-chip.cat-chrome::before { background: var(--teal); }
+    .stack-chip.cat-api::before { background: var(--coral); }
+    .stack-chip:hover.cat-python { color: var(--sky); }
+    .stack-chip:hover.cat-ai { color: var(--gold); }
+    .stack-chip:hover.cat-chrome { color: var(--teal); }
+    .stack-chip:hover.cat-api { color: var(--coral); }
+
+    /* ========== ARCHITECTURE DIAGRAM ========== */
+    .arch-diagram {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      padding: 32px;
+      position: relative;
+      overflow-x: auto;
+    }
+    .arch-diagram::before,
+    .arch-diagram::after {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      border-color: var(--gold-dim);
+      border-style: solid;
+    }
+    .arch-diagram::before {
+      top: 8px; left: 8px;
+      border-width: 1px 0 0 1px;
+    }
+    .arch-diagram::after {
+      bottom: 8px; right: 8px;
+      border-width: 0 1px 1px 0;
+    }
+    .arch-diagram svg text {
+      font-family: var(--font-body);
+    }
+    .arch-diagram svg .label-mono {
+      font-family: var(--font-mono);
+    }
+    .arch-diagram svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      min-width: 1100px;
+    }
+
+    /* ========== MODE CARDS ========== */
+    .modes-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+    }
+    .mode-card {
+      background: var(--bg-card);
+      padding: 36px 28px;
+      position: relative;
+      transition: background 0.3s ease;
+    }
+    .mode-card:hover {
+      background: var(--bg-elevated);
+    }
+    .mode-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+    }
+    .mode-card:nth-child(1)::before { background: var(--sky); }
+    .mode-card:nth-child(2)::before { background: var(--gold); }
+    .mode-card:nth-child(3)::before { background: var(--teal); }
+
+    .mode-number {
+      font-family: var(--font-display);
+      font-size: 48px;
+      font-weight: 900;
+      color: var(--text-faint);
+      line-height: 1;
+      margin-bottom: 16px;
+    }
+    .mode-card:nth-child(1):hover .mode-number { color: rgba(122, 162, 247, 0.2); }
+    .mode-card:nth-child(2):hover .mode-number { color: var(--gold-glow); }
+    .mode-card:nth-child(3):hover .mode-number { color: rgba(45, 212, 191, 0.15); }
+
+    .mode-name {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .mode-card:nth-child(1) .mode-name { color: var(--sky); }
+    .mode-card:nth-child(2) .mode-name { color: var(--gold); }
+    .mode-card:nth-child(3) .mode-name { color: var(--teal); }
+
+    .mode-desc {
+      font-size: 14px;
+      color: var(--text-secondary);
+      font-weight: 300;
+      margin-bottom: 20px;
+    }
+    .mode-flow {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 2;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border);
+      padding-top: 16px;
+    }
+    .mode-flow .step {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .mode-flow .arrow {
+      color: var(--text-faint);
+      font-size: 10px;
+      margin: 2px 0;
+    }
+
+    /* ========== ACTION CARDS ========== */
+    .action-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+    }
+    .action-card {
+      background: var(--bg-card);
+      padding: 24px;
+      border-left: 2px solid var(--border);
+      transition: all 0.3s ease;
+    }
+    .action-card:hover {
+      background: var(--bg-elevated);
+    }
+    .action-card:nth-child(1) { border-left-color: var(--teal); }
+    .action-card:nth-child(2) { border-left-color: var(--sky); }
+    .action-card:nth-child(3) { border-left-color: var(--gold); }
+    .action-card:nth-child(4) { border-left-color: var(--lavender); }
+    .action-card:nth-child(5) { border-left-color: var(--coral); }
+    .action-card:nth-child(6) { border-left-color: var(--text-muted); }
+
+    .action-card h4 {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--text-primary);
+    }
+    .action-card p {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 300;
+      line-height: 1.6;
+    }
+
+    /* ========== FILE TREE ========== */
+    .file-tree-box {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      padding: 32px;
+      position: relative;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 2.0;
+      color: var(--text-muted);
+    }
+    .file-tree-box::before,
+    .file-tree-box::after {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      border-color: var(--gold-dim);
+      border-style: solid;
+    }
+    .file-tree-box::before { top: 8px; right: 8px; border-width: 1px 1px 0 0; }
+    .file-tree-box::after { bottom: 8px; left: 8px; border-width: 0 0 1px 1px; }
+    .ft-dir { color: var(--gold); font-weight: 600; }
+    .ft-file { color: var(--text-secondary); }
+    .ft-comment { color: var(--text-faint); }
+    .ft-line { color: var(--border); }
+
+    /* ========== FEATURES ========== */
+    .features-split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+    }
+    .feature-col-title {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .feature-col-title.fn { color: var(--gold); }
+    .feature-col-title.nf { color: var(--teal); }
+
+    .feature-item {
+      padding: 20px 0;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .feature-item:last-child { border-bottom: none; }
+    .feature-item h4 {
+      font-family: var(--font-display);
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+    .feature-item p {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 300;
+    }
+
+    /* ========== DEPLOYMENT ========== */
+    .deploy-cols {
+      display: grid;
+      grid-template-columns: 1fr 1px 1fr;
+      gap: 0 48px;
+    }
+    .deploy-col h3 {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 28px;
+    }
+    .d-step {
+      display: flex;
+      gap: 16px;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .d-step:last-child { border-bottom: none; }
+    .d-num {
+      font-family: var(--font-display);
+      font-size: 24px;
+      font-weight: 900;
+      color: var(--text-faint);
+      min-width: 32px;
+      line-height: 1.2;
+    }
+    .d-step:hover .d-num { color: var(--gold-dim); }
+    .d-text {
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-weight: 300;
+    }
+    .d-text strong {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+    .d-text code {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--gold);
+      background: var(--gold-glow);
+      padding: 1px 6px;
+    }
+
+    .prereq-list {
+      margin-top: 32px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+    .prereq-list h4 {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+    .prereq-list li {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 300;
+      padding: 3px 0 3px 16px;
+      position: relative;
+      list-style: none;
+    }
+    .prereq-list li::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 11px;
+      width: 4px;
+      height: 4px;
+      background: var(--gold-dim);
+      border-radius: 50%;
+    }
+
+    /* ========== FOOTER ========== */
+    .footer {
+      padding: 60px 0 40px;
+      border-top: 1px solid var(--border-subtle);
+      text-align: center;
+    }
+    .footer-line {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-faint);
+    }
+
+    /* ========== RESPONSIVE ========== */
+    @media (max-width: 900px) {
+      .page-wrapper { padding: 0 20px; }
+      .context-grid { grid-template-columns: 1fr; gap: 0; }
+      .context-divider { display: none; }
+      .modes-grid, .action-grid { grid-template-columns: 1fr; }
+      .features-split { grid-template-columns: 1fr; gap: 20px; }
+      .deploy-cols { grid-template-columns: 1fr; gap: 40px; }
+      .deploy-cols .context-divider { display: none; }
+    }
+
+    /* ========== ANIMATIONS ========== */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .hero, .section {
+      animation: fadeUp 0.6s ease-out both;
+    }
+    .section:nth-child(2) { animation-delay: 0.05s; }
+    .section:nth-child(3) { animation-delay: 0.1s; }
+    .section:nth-child(4) { animation-delay: 0.15s; }
+
+    /* Diagram pulse animation */
+    @keyframes pulse-ring {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 0.8; }
+    }
+  </style>
+</head>
+<body>
+<div class="page-wrapper">
+
+  <!-- ========== HERO ========== -->
+  <div class="hero">
+    <div class="hero-eyebrow">Gemini Hackathon 2026</div>
+    <h1>Rive<br><em>Navigator</em></h1>
+    <p class="hero-desc">An AI co-pilot for Rive with two core loops: a vision-based UI agent that understands and operates the editor in real time, and a Nano Banana SVG Generator that turns prompts into concept art, traces it into sanitized SVG, pastes it into Rive, and hands off to the animation agent. Fully voice-enabled with push-to-talk input and sentence-pipelined audio narration for a text-free workflow.</p>
+    <div class="hero-tags">
+      <span class="hero-tag">Chrome Extension MV3</span>
+      <span class="hero-tag">Google ADK Agent</span>
+      <span class="hero-tag">Gemini 3 Flash + 3.1 Pro</span>
+      <span class="hero-tag">Gemini Pro Image</span>
+      <span class="hero-tag">Nano Banana SVG Generator</span>
+      <span class="hero-tag">CDP Automation</span>
+      <span class="hero-tag">vtracer + SVG Sanitizer</span>
+      <span class="hero-tag">Gemini TTS</span>
+      <span class="hero-tag">Web Speech API</span>
+      <span class="hero-tag">Prompt-to-SVG Import</span>
+      <span class="hero-tag">Rive Docs + Visual Refs</span>
+    </div>
+  </div>
+
+  <!-- ========== BUSINESS CONTEXT ========== -->
+  <div class="section">
+    <div class="section-label">01 &mdash; Context</div>
+    <div class="section-title">Problem &amp; Solution</div>
+    <div class="context-grid">
+      <div class="context-block">
+        <h3>The Problem</h3>
+        <p>Rive is a powerful animation editor with a steep learning curve. Designers and developers struggle to navigate multi-step workflows&mdash;state machines, keyframes, transitions, imports, inspector edits&mdash;without extensive documentation reading. The editor is a Flutter Web canvas app, making standard browser automation unreliable, and pure in-editor generation quickly hits a ceiling once the task requires assets more complex than simple shapes.</p>
+        <h3>The Solution</h3>
+        <p>Rive Navigator combines a multimodal UI agent with a dedicated prompt-to-SVG asset pipeline. It sees the editor via screenshots, understands Rive's UI layout spatially, answers questions contextually, guides users step-by-step with visual cursors, autonomously executes trusted browser events, and can generate a concept image, trace and sanitize SVG, paste it into Rive, then continue with animation.</p>
+      </div>
+      <div class="context-divider"></div>
+      <div class="context-block">
+        <h3>Target Users</h3>
+        <ul>
+          <li>Designers learning Rive for interactive UI and motion design</li>
+          <li>Developers integrating Rive animations into production apps</li>
+          <li>Teams building complex state machines and transition logic</li>
+        </ul>
+        <h3>Key Differentiators</h3>
+        <ul>
+          <li>Multimodal vision&mdash;Gemini analyzes live editor screenshots and grounds decisions in current UI state</li>
+          <li>Agentic control&mdash;AI executes clicks, keystrokes, typing, hover, drags, and paste commands directly via CDP</li>
+          <li>Prompt-to-SVG creation&mdash;Nano Banana SVG Generator produces concept art, vectorizes it, sanitizes it, and imports it into Rive</li>
+          <li>Runtime context engine&mdash;small stable policy + per-turn procedure cards + output contracts tuned for Flash reliability</li>
+          <li>Documentation grounding&mdash;285 .mdx files with section-level scoring, extracted steps, visual-dependency hints, and image refs</li>
+          <li>Push-to-talk + TTS&mdash;hold Ctrl+Space, speak, release to send. Full text-free loop with subtitle overlay</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== TECH STACK ========== -->
+  <div class="section">
+    <div class="section-label">02 &mdash; Stack</div>
+    <div class="section-title">Technologies</div>
+    <div class="stack-row">
+      <span class="stack-chip cat-python">Python 3.11+</span>
+      <span class="stack-chip cat-python">FastAPI</span>
+      <span class="stack-chip cat-python">Uvicorn</span>
+      <span class="stack-chip cat-ai">Google ADK</span>
+      <span class="stack-chip cat-ai">Gemini 3 Flash</span>
+      <span class="stack-chip cat-ai">Gemini 3.1 Pro</span>
+      <span class="stack-chip cat-ai">Gemini Pro Image</span>
+      <span class="stack-chip cat-ai">Gemini TTS</span>
+      <span class="stack-chip cat-python">vtracer</span>
+      <span class="stack-chip cat-python">SVG Sanitizer</span>
+      <span class="stack-chip cat-chrome">Chrome Extension MV3</span>
+      <span class="stack-chip cat-chrome">Chrome DevTools Protocol</span>
+      <span class="stack-chip cat-chrome">Side Panel API</span>
+      <span class="stack-chip cat-chrome">Debugger API</span>
+      <span class="stack-chip cat-chrome">Clipboard Paste Import</span>
+      <span class="stack-chip cat-chrome">Web Speech API</span>
+      <span class="stack-chip cat-api">Google Cloud Run</span>
+      <span class="stack-chip cat-api">REST / JSON</span>
+    </div>
+  </div>
+
+  <!-- ========== SYSTEM ARCHITECTURE ========== -->
+  <div class="section">
+    <div class="section-label">03 &mdash; Architecture</div>
+    <div class="section-title">System Overview</div>
+    <div class="arch-diagram">
+      <svg viewBox="0 0 1100 700" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="a-gold" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#c9a227"/>
+          </marker>
+          <marker id="a-teal" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#2dd4bf"/>
+          </marker>
+          <marker id="a-sky" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#7aa2f7"/>
+          </marker>
+          <marker id="a-coral" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#f07171"/>
+          </marker>
+          <marker id="a-lav" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#bb9af7"/>
+          </marker>
+
+          <!-- Subtle grid in diagram -->
+          <pattern id="diagGrid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e1e28" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+
+        <!-- Background grid -->
+        <rect width="1100" height="700" fill="url(#diagGrid)"/>
+
+        <!-- ===== CHROME LAYER ===== -->
+        <rect x="16" y="16" width="1068" height="300" rx="2" fill="#111118" stroke="#2a2a35" stroke-width="1"/>
+        <text x="32" y="38" class="label-mono" fill="#6b6560" font-size="9" font-weight="500" letter-spacing="3">CHROME BROWSER</text>
+
+        <!-- Rive Editor Tab -->
+        <rect x="32" y="52" width="300" height="250" rx="2" fill="#0e0e14" stroke="#2a2a35" stroke-width="0.5"/>
+        <rect x="32" y="52" width="300" height="2" fill="#7aa2f7"/>
+        <text x="48" y="76" fill="#ede6d6" font-size="13" font-weight="600">Rive Editor Tab</text>
+        <text x="48" y="93" class="label-mono" fill="#6b6560" font-size="9">rive.app  &middot;  Flutter Web Canvas</text>
+
+        <!-- content.js -->
+        <rect x="48" y="110" width="268" height="90" rx="2" fill="#16161f" stroke="#7aa2f7" stroke-width="0.5" stroke-dasharray="3,3"/>
+        <text x="60" y="130" class="label-mono" fill="#7aa2f7" font-size="10" font-weight="500">content.js</text>
+        <text x="60" y="148" fill="#6b6560" font-size="10">Cursor overlay (pulsing ring + label)</text>
+        <text x="60" y="163" fill="#6b6560" font-size="10">Subtitle overlay (TTS display)</text>
+        <text x="60" y="178" fill="#6b6560" font-size="10">Push-to-talk mic (Ctrl+Space, live transcript)</text>
+        <text x="60" y="193" class="label-mono" fill="#3d3a36" font-size="8" font-style="italic">Voice via Web Speech API &mdash; canvas-based, no DOM</text>
+
+        <!-- Visual overlay indicator -->
+        <rect x="48" y="210" width="268" height="36" rx="2" fill="#0e0e14" stroke="#c9a227" stroke-width="0.5"/>
+        <circle cx="66" cy="228" r="5" fill="#c9a227" opacity="0.6">
+          <animate attributeName="opacity" values="0.3;0.8;0.3" dur="2s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="66" cy="228" r="9" fill="none" stroke="#c9a227" stroke-width="0.5" opacity="0.3">
+          <animate attributeName="r" values="9;12;9" dur="2s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" values="0.3;0.1;0.3" dur="2s" repeatCount="indefinite"/>
+        </circle>
+        <text x="82" y="232" fill="#c9a227" font-size="10">Visual cursor + subtitle overlays on canvas</text>
+
+        <!-- Background Service Worker -->
+        <rect x="370" y="52" width="310" height="250" rx="2" fill="#0e0e14" stroke="#2a2a35" stroke-width="0.5"/>
+        <rect x="370" y="52" width="310" height="2" fill="#c9a227"/>
+        <text x="386" y="76" fill="#ede6d6" font-size="13" font-weight="600">Background Service Worker</text>
+        <text x="386" y="93" class="label-mono" fill="#6b6560" font-size="9">background.js  &middot;  CDP + paste bridge</text>
+
+        <rect x="386" y="110" width="278" height="50" rx="2" fill="#16161f" stroke="#c9a227" stroke-width="0.5"/>
+        <text x="398" y="130" class="label-mono" fill="#c9a227" font-size="10" font-weight="500">CDP Action Engine</text>
+        <text x="398" y="148" class="label-mono" fill="#6b6560" font-size="9">click  doubleclick  drag  key  type  hover  wait</text>
+
+        <rect x="386" y="170" width="134" height="36" rx="2" fill="#16161f" stroke="#7aa2f7" stroke-width="0.5"/>
+        <text x="398" y="190" class="label-mono" fill="#7aa2f7" font-size="9" font-weight="500">Screenshot Capture</text>
+
+        <rect x="530" y="170" width="134" height="36" rx="2" fill="#16161f" stroke="#2dd4bf" stroke-width="0.5"/>
+        <text x="540" y="190" class="label-mono" fill="#2dd4bf" font-size="9" font-weight="500">Relay + Paste Import</text>
+
+        <rect x="386" y="218" width="278" height="42" rx="2" fill="#16161f" stroke="#bb9af7" stroke-width="0.5"/>
+        <text x="398" y="236" class="label-mono" fill="#bb9af7" font-size="9" font-weight="500">HTTP Bridge</text>
+        <text x="398" y="249" class="label-mono" fill="#3d3a36" font-size="8">chat  &middot;  assets  &middot;  tts</text>
+
+        <!-- Sidebar Panel -->
+        <rect x="718" y="52" width="350" height="250" rx="2" fill="#0e0e14" stroke="#2a2a35" stroke-width="0.5"/>
+        <rect x="718" y="52" width="350" height="2" fill="#2dd4bf"/>
+        <text x="734" y="76" fill="#ede6d6" font-size="13" font-weight="600">Sidebar Panel</text>
+        <text x="734" y="93" class="label-mono" fill="#6b6560" font-size="9">sidebar.js  &middot;  chat + assets</text>
+
+        <rect x="734" y="110" width="318" height="50" rx="2" fill="#16161f" stroke="#f07171" stroke-width="0.5"/>
+        <text x="746" y="130" class="label-mono" fill="#f07171" font-size="10" font-weight="500">Chat + Preview UI</text>
+        <text x="746" y="144" fill="#3d3a36" font-size="9">messages, screenshots, quick actions</text>
+        <text x="746" y="155" fill="#3d3a36" font-size="9">asset preview + import panel</text>
+
+        <rect x="734" y="170" width="100" height="34" rx="2" fill="#16161f" stroke="#c9a227" stroke-width="0.5"/>
+        <text x="746" y="190" class="label-mono" fill="#c9a227" font-size="9" font-weight="500">Task UI</text>
+
+        <rect x="842" y="170" width="100" height="34" rx="2" fill="#16161f" stroke="#2dd4bf" stroke-width="0.5"/>
+        <text x="850" y="190" class="label-mono" fill="#2dd4bf" font-size="9" font-weight="500">Model + Mode</text>
+
+        <rect x="950" y="170" width="102" height="34" rx="2" fill="#16161f" stroke="#f07171" stroke-width="0.5"/>
+        <text x="962" y="190" class="label-mono" fill="#f07171" font-size="9" font-weight="500">PTT Voice</text>
+
+        <rect x="734" y="212" width="155" height="34" rx="2" fill="#16161f" stroke="#bb9af7" stroke-width="0.5"/>
+        <text x="746" y="232" class="label-mono" fill="#bb9af7" font-size="9" font-weight="500">Nano Banana SVG</text>
+
+        <rect x="897" y="212" width="155" height="34" rx="2" fill="#16161f" stroke="#c9a227" stroke-width="0.5"/>
+        <text x="909" y="232" class="label-mono" fill="#6b6560" font-size="9" font-weight="500">Agentic Loop</text>
+
+        <rect x="734" y="256" width="318" height="28" rx="2" fill="#1a1210" stroke="#f07171" stroke-width="0.5"/>
+        <text x="746" y="274" class="label-mono" fill="#f07171" font-size="8" font-weight="500">SAFETY</text>
+        <text x="812" y="274" class="label-mono" fill="#3d3a36" font-size="8">action caps &middot; retries &middot; paste handoff</text>
+
+        <!-- Chrome internal arrows -->
+        <path d="M332,165 L380,165" stroke="#c9a227" stroke-width="1" marker-end="url(#a-gold)" fill="none"/>
+        <path d="M380,145 L332,145" stroke="#7aa2f7" stroke-width="1" marker-end="url(#a-sky)" fill="none"/>
+        <text x="340" y="140" class="label-mono" fill="#3d3a36" font-size="7">CDP actions</text>
+        <text x="340" y="178" class="label-mono" fill="#3d3a36" font-size="7">overlays</text>
+
+        <path d="M680,188 L714,188" stroke="#bb9af7" stroke-width="1" marker-end="url(#a-lav)" fill="none"/>
+        <path d="M714,216 L680,216" stroke="#2dd4bf" stroke-width="1" marker-end="url(#a-teal)" fill="none"/>
+        <text x="686" y="183" class="label-mono" fill="#3d3a36" font-size="7">responses</text>
+        <text x="686" y="229" class="label-mono" fill="#3d3a36" font-size="7">requests</text>
+
+        <!-- ===== PYTHON BACKEND ===== -->
+        <rect x="16" y="360" width="1068" height="280" rx="2" fill="#111118" stroke="#2a2a35" stroke-width="1"/>
+        <text x="32" y="382" class="label-mono" fill="#6b6560" font-size="9" font-weight="500" letter-spacing="3">PYTHON BACKEND &mdash; localhost:8000</text>
+
+        <!-- FastAPI -->
+        <rect x="32" y="398" width="210" height="120" rx="2" fill="#0e0e14" stroke="#c9a227" stroke-width="0.5"/>
+        <rect x="32" y="398" width="2" height="120" fill="#c9a227"/>
+        <text x="48" y="420" fill="#c9a227" font-size="13" font-weight="600">FastAPI Server</text>
+        <text x="48" y="437" class="label-mono" fill="#3d3a36" font-size="9">server.py</text>
+        <text x="48" y="460" class="label-mono" fill="#6b6560" font-size="10">POST /api/chat</text>
+        <text x="48" y="476" class="label-mono" fill="#6b6560" font-size="10">POST /api/assets/preview</text>
+        <text x="48" y="492" class="label-mono" fill="#6b6560" font-size="10">POST /api/assets/vectorize</text>
+        <text x="48" y="508" class="label-mono" fill="#3d3a36" font-size="10">POST /api/tts  &middot;  GET /api/health</text>
+
+        <!-- ADK Agent -->
+        <rect x="280" y="398" width="250" height="120" rx="2" fill="#0e0e14" stroke="#bb9af7" stroke-width="0.5"/>
+        <rect x="280" y="398" width="2" height="120" fill="#bb9af7"/>
+        <text x="296" y="420" fill="#bb9af7" font-size="13" font-weight="600">ADK Agent</text>
+        <text x="296" y="437" class="label-mono" fill="#3d3a36" font-size="8">agent.py &middot; Flash / 3.1 Pro runners</text>
+        <text x="296" y="456" class="label-mono" fill="#a89f8f" font-size="9">prompting.py</text>
+        <text x="296" y="469" fill="#3d3a36" font-size="9">runtime package, core Rive ops, procedure cards</text>
+        <text x="296" y="488" class="label-mono" fill="#a89f8f" font-size="9">output_parser.py</text>
+        <text x="296" y="501" fill="#3d3a36" font-size="9">ACTION/CURSOR validation, coord clamp, safety</text>
+
+        <!-- Agent Tools -->
+        <rect x="568" y="398" width="220" height="124" rx="2" fill="#0e0e14" stroke="#7aa2f7" stroke-width="0.5"/>
+        <rect x="568" y="398" width="2" height="124" fill="#7aa2f7"/>
+        <text x="584" y="420" fill="#7aa2f7" font-size="13" font-weight="600">Agent Tools</text>
+        <text x="584" y="444" class="label-mono" fill="#a89f8f" font-size="10">analyze_screenshot()</text>
+        <text x="584" y="460" fill="#3d3a36" font-size="9">Records observation, tracks steps</text>
+        <text x="584" y="480" class="label-mono" fill="#a89f8f" font-size="10">lookup_rive_docs()</text>
+        <text x="584" y="496" fill="#3d3a36" font-size="9">docs scoring, steps, image refs, visual hints</text>
+        <text x="584" y="514" class="label-mono" fill="#a89f8f" font-size="8">task helpers: start / advance / verify</text>
+
+        <!-- Session -->
+        <rect x="826" y="398" width="242" height="120" rx="2" fill="#0e0e14" stroke="#2dd4bf" stroke-width="0.5"/>
+        <rect x="826" y="398" width="2" height="120" fill="#2dd4bf"/>
+        <text x="842" y="420" fill="#2dd4bf" font-size="13" font-weight="600">Session &amp; State</text>
+        <text x="842" y="444" class="label-mono" fill="#a89f8f" font-size="10">InMemorySessionService</text>
+        <text x="842" y="462" fill="#3d3a36" font-size="9">step_count, last_observation</text>
+        <text x="842" y="478" fill="#3d3a36" font-size="9">task:active, task:steps, task:current_step</text>
+        <text x="842" y="498" class="label-mono" fill="#a89f8f" font-size="10">InMemoryArtifactService</text>
+
+        <!-- Sub-services -->
+        <rect x="568" y="536" width="220" height="46" rx="2" fill="#0e0e14" stroke="#c9a227" stroke-width="0.5"/>
+        <text x="584" y="554" class="label-mono" fill="#c9a227" font-size="9" font-weight="500">rive-docs/</text>
+        <text x="584" y="568" class="label-mono" fill="#3d3a36" font-size="8">285 .mdx &middot; steps + image refs</text>
+
+        <rect x="826" y="536" width="242" height="46" rx="2" fill="#0e0e14" stroke="#f07171" stroke-width="0.5"/>
+        <text x="842" y="554" class="label-mono" fill="#f07171" font-size="9" font-weight="500">Gemini Media Models</text>
+        <text x="842" y="568" class="label-mono" fill="#3d3a36" font-size="8">pro-image + flash-tts</text>
+
+        <rect x="32" y="536" width="210" height="46" rx="2" fill="#0e0e14" stroke="#3d3a36" stroke-width="0.5"/>
+        <text x="48" y="554" class="label-mono" fill="#a89f8f" font-size="9">asset_pipeline.py + svg_sanitizer.py</text>
+        <text x="48" y="568" class="label-mono" fill="#6b6560" font-size="7">preview &rarr; vtracer &rarr; SVG &rarr; generated_assets/</text>
+
+        <!-- Backend internal arrows -->
+        <path d="M242,460 L276,460" stroke="#c9a227" stroke-width="1" marker-end="url(#a-gold)" fill="none"/>
+        <path d="M530,460 L564,460" stroke="#bb9af7" stroke-width="1" marker-end="url(#a-lav)" fill="none"/>
+        <path d="M788,460 L822,460" stroke="#7aa2f7" stroke-width="1" marker-end="url(#a-sky)" fill="none"/>
+        <path d="M678,522 L678,532" stroke="#c9a227" stroke-width="0.5" marker-end="url(#a-gold)" fill="none"/>
+
+        <!-- Chrome <-> Backend arrows -->
+        <path d="M525,252 L525,332 L20,332 L20,448 L28,448" stroke="#bb9af7" stroke-width="1.5" marker-end="url(#a-lav)" fill="none" stroke-dasharray="4,3"/>
+        <text x="280" y="327" class="label-mono" fill="#bb9af7" font-size="8" font-weight="500">HTTP POST screenshot + message or asset prompt</text>
+
+        <path d="M947,398 L947,352 L630,352 L630,302" stroke="#2dd4bf" stroke-width="1.5" marker-end="url(#a-teal)" fill="none" stroke-dasharray="4,3"/>
+        <text x="732" y="370" class="label-mono" fill="#2dd4bf" font-size="8" font-weight="500">JSON response + actions + task state + asset ids</text>
+
+        <!-- Gemini API -->
+        <rect x="215" y="625" width="380" height="46" rx="2" fill="#1a1520" stroke="#bb9af7" stroke-width="1"/>
+        <rect x="215" y="625" width="380" height="2" fill="#bb9af7"/>
+        <text x="405" y="650" fill="#bb9af7" font-size="14" font-weight="700" text-anchor="middle">Gemini API</text>
+        <text x="405" y="664" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">Google Cloud &middot; multimodal + image generation + TTS</text>
+        <path d="M405,518 L405,620" stroke="#bb9af7" stroke-width="1" marker-end="url(#a-lav)" fill="none" stroke-dasharray="3,3"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- ========== DATA FLOW ========== -->
+  <div class="section">
+    <div class="section-label">04 &mdash; Data Flow</div>
+    <div class="section-title">Core Runtime Loops</div>
+    <p style="font-size: 14px; color: var(--text-muted); font-weight: 300; margin-bottom: 32px; max-width: 760px;">Rive Navigator now operates as two coordinated runtime loops. The first is the vision-guided agent loop that understands and controls the editor. The second is the Nano Banana SVG loop that turns a prompt into a Rive-imported asset, then hands the new editor state back to the same agent for animation.</p>
+    <div style="font-family: var(--font-display); font-size: 24px; font-weight: 700; color: var(--gold); margin-bottom: 18px;">Vision-Guided Agent Loop</div>
+    <div class="arch-diagram">
+      <svg viewBox="0 0 1100 320" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern id="flowGrid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e1e28" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+        <rect width="1100" height="320" fill="url(#flowGrid)"/>
+
+        <!-- Flow steps -->
+        <rect x="16" y="20" width="140" height="64" rx="2" fill="#111118" stroke="#7aa2f7" stroke-width="1"/>
+        <text x="86" y="48" class="label-mono" fill="#7aa2f7" font-size="10" font-weight="600" text-anchor="middle">User Request</text>
+        <text x="86" y="65" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">"Build a toggle" + screenshot</text>
+
+        <path d="M156,52 L190,52" stroke="#c9a227" stroke-width="1" marker-end="url(#a-gold)" fill="none"/>
+
+        <rect x="195" y="20" width="140" height="64" rx="2" fill="#111118" stroke="#bb9af7" stroke-width="1"/>
+        <text x="265" y="48" class="label-mono" fill="#bb9af7" font-size="10" font-weight="600" text-anchor="middle">Agent Plans</text>
+        <text x="265" y="65" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">start_task() &middot; 8 steps</text>
+
+        <path d="M335,52 L370,52" stroke="#c9a227" stroke-width="1" marker-end="url(#a-gold)" fill="none"/>
+
+        <rect x="375" y="20" width="140" height="64" rx="2" fill="#111118" stroke="#c9a227" stroke-width="1"/>
+        <text x="445" y="48" class="label-mono" fill="#c9a227" font-size="10" font-weight="600" text-anchor="middle">ACTION Tag</text>
+        <text x="445" y="65" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">{"type":"key","key":"r"}</text>
+
+        <path d="M515,52 L550,52" stroke="#c9a227" stroke-width="1" marker-end="url(#a-gold)" fill="none"/>
+
+        <rect x="555" y="20" width="140" height="64" rx="2" fill="#111118" stroke="#2dd4bf" stroke-width="1"/>
+        <text x="625" y="48" class="label-mono" fill="#2dd4bf" font-size="10" font-weight="600" text-anchor="middle">CDP Execute</text>
+        <text x="625" y="65" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">dispatchKeyEvent &middot; trusted</text>
+
+        <path d="M695,52 L730,52" stroke="#c9a227" stroke-width="1" marker-end="url(#a-gold)" fill="none"/>
+
+        <rect x="735" y="20" width="100" height="64" rx="2" fill="#111118" stroke="#6b6560" stroke-width="0.5"/>
+        <text x="785" y="48" class="label-mono" fill="#6b6560" font-size="10" font-weight="600" text-anchor="middle">Wait</text>
+        <text x="785" y="65" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">800ms settle</text>
+
+        <path d="M835,52 L870,52" stroke="#c9a227" stroke-width="1" marker-end="url(#a-gold)" fill="none"/>
+
+        <rect x="875" y="20" width="140" height="64" rx="2" fill="#111118" stroke="#7aa2f7" stroke-width="1"/>
+        <text x="945" y="48" class="label-mono" fill="#7aa2f7" font-size="10" font-weight="600" text-anchor="middle">Screenshot</text>
+        <text x="945" y="65" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">captureVisibleTab PNG</text>
+
+        <!-- Loop arrow -->
+        <path d="M945,84 L945,115 L265,115 L265,88" stroke="#f07171" stroke-width="1.5" marker-end="url(#a-coral)" fill="none" stroke-dasharray="4,3"/>
+        <text x="560" y="110" class="label-mono" fill="#f07171" font-size="9" font-weight="500" text-anchor="middle">Verify + Next Action &mdash; loop until task complete or paused</text>
+
+        <!-- Safety rails -->
+        <rect x="16" y="145" width="999" height="52" rx="2" fill="#14100e" stroke="#f07171" stroke-width="0.5"/>
+        <text x="32" y="168" class="label-mono" fill="#f07171" font-size="9" font-weight="600">SAFETY RAILS</text>
+        <text x="145" y="168" class="label-mono" fill="#6b6560" font-size="9">Max 150 actions</text>
+        <text x="310" y="168" class="label-mono" fill="#6b6560" font-size="9">Stuck detection (2 repeats = escalate)</text>
+        <text x="580" y="168" class="label-mono" fill="#6b6560" font-size="9">% vs px auto-correct</text>
+        <text x="750" y="168" class="label-mono" fill="#6b6560" font-size="9">Focus check before Backspace</text>
+        <text x="32" y="186" class="label-mono" fill="#3d3a36" font-size="9">Triple-click (not Cmd+A) for text select &mdash; Cmd+A selects canvas objects which Backspace would delete</text>
+
+        <!-- TTS Pipeline -->
+        <rect x="16" y="215" width="999" height="90" rx="2" fill="#111118" stroke="#2a2a35" stroke-width="0.5"/>
+        <text x="32" y="238" class="label-mono" fill="#c9a227" font-size="9" font-weight="600">AUDIO NARRATION PIPELINE</text>
+        <text x="260" y="238" class="label-mono" fill="#3d3a36" font-size="9">non-blocking &mdash; runs in parallel with agentic loop</text>
+
+        <rect x="32" y="252" width="110" height="22" rx="1" fill="#1a1520" stroke="#bb9af7" stroke-width="0.5"/>
+        <text x="87" y="267" class="label-mono" fill="#bb9af7" font-size="8" text-anchor="middle">Split sentences</text>
+        <path d="M142,263 L158,263" stroke="#6b6560" stroke-width="0.5" marker-end="url(#a-gold)" fill="none"/>
+        <rect x="162" y="252" width="110" height="22" rx="1" fill="#1a1520" stroke="#bb9af7" stroke-width="0.5"/>
+        <text x="217" y="267" class="label-mono" fill="#bb9af7" font-size="8" text-anchor="middle">Fetch TTS #1</text>
+        <path d="M272,263 L288,263" stroke="#6b6560" stroke-width="0.5" marker-end="url(#a-gold)" fill="none"/>
+        <rect x="292" y="252" width="90" height="22" rx="1" fill="#1a1520" stroke="#2dd4bf" stroke-width="0.5"/>
+        <text x="337" y="267" class="label-mono" fill="#2dd4bf" font-size="8" text-anchor="middle">Play #1</text>
+        <path d="M382,263 L398,263" stroke="#6b6560" stroke-width="0.5" marker-end="url(#a-gold)" fill="none"/>
+        <rect x="402" y="252" width="130" height="22" rx="1" fill="#1a1520" stroke="#bb9af7" stroke-width="0.5"/>
+        <text x="467" y="267" class="label-mono" fill="#bb9af7" font-size="8" text-anchor="middle">Pre-fetch #2 (overlap)</text>
+        <path d="M532,263 L548,263" stroke="#6b6560" stroke-width="0.5" marker-end="url(#a-gold)" fill="none"/>
+        <rect x="552" y="252" width="90" height="22" rx="1" fill="#1a1520" stroke="#2dd4bf" stroke-width="0.5"/>
+        <text x="597" y="267" class="label-mono" fill="#2dd4bf" font-size="8" text-anchor="middle">Play #2</text>
+        <path d="M642,263 L658,263" stroke="#6b6560" stroke-width="0.5" fill="none"/>
+        <text x="672" y="267" class="label-mono" fill="#3d3a36" font-size="8">...</text>
+
+        <rect x="32" y="282" width="240" height="18" rx="1" fill="#16161f" stroke="#c9a227" stroke-width="0.3"/>
+        <text x="152" y="294" class="label-mono" fill="#c9a227" font-size="7" text-anchor="middle">Subtitle overlay displayed on Rive canvas during playback</text>
+      </svg>
+    </div>
+    <div style="font-family: var(--font-display); font-size: 24px; font-weight: 700; color: var(--gold); margin: 40px 0 18px;">Nano Banana SVG Loop</div>
+    <p style="font-size: 14px; color: var(--text-muted); font-weight: 300; margin-bottom: 24px; max-width: 760px;">This pipeline is intentionally separate from `/api/chat`. The sidebar requests an image preview, waits for the user to confirm it, vectorizes the approved image with <code>vtracer</code>, sanitizes the SVG for Rive compatibility, pastes it into the editor, then captures the updated state so the normal agent can animate it.</p>
+    <div class="arch-diagram">
+      <svg viewBox="0 0 1100 300" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="assetArrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#c9a227"/>
+          </marker>
+          <pattern id="assetGrid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e1e28" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+        <rect width="1100" height="290" fill="url(#assetGrid)"/>
+
+        <rect x="16" y="20" width="118" height="72" rx="2" fill="#111118" stroke="#7aa2f7" stroke-width="1"/>
+        <text x="75" y="48" class="label-mono" fill="#7aa2f7" font-size="10" font-weight="600" text-anchor="middle">Asset Prompt</text>
+        <text x="75" y="66" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">prompt + style preset</text>
+
+        <path d="M134,56 L148,56" stroke="#c9a227" stroke-width="1" marker-end="url(#assetArrow)" fill="none"/>
+
+        <rect x="154" y="20" width="118" height="72" rx="2" fill="#111118" stroke="#bb9af7" stroke-width="1"/>
+        <text x="213" y="48" class="label-mono" fill="#bb9af7" font-size="10" font-weight="600" text-anchor="middle">/api/assets/preview</text>
+        <text x="213" y="66" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">timeout + friendly errors</text>
+
+        <path d="M272,56 L286,56" stroke="#c9a227" stroke-width="1" marker-end="url(#assetArrow)" fill="none"/>
+
+        <rect x="292" y="20" width="118" height="72" rx="2" fill="#111118" stroke="#f07171" stroke-width="1"/>
+        <text x="351" y="48" class="label-mono" fill="#f07171" font-size="10" font-weight="600" text-anchor="middle">Gemini Pro Image</text>
+        <text x="351" y="66" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">concept PNG preview</text>
+
+        <path d="M410,56 L424,56" stroke="#c9a227" stroke-width="1" marker-end="url(#assetArrow)" fill="none"/>
+
+        <rect x="430" y="20" width="118" height="72" rx="2" fill="#111118" stroke="#2dd4bf" stroke-width="1"/>
+        <text x="489" y="48" class="label-mono" fill="#2dd4bf" font-size="10" font-weight="600" text-anchor="middle">Sidebar Preview</text>
+        <text x="489" y="66" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">regenerate / approve</text>
+
+        <path d="M548,56 L562,56" stroke="#c9a227" stroke-width="1" marker-end="url(#assetArrow)" fill="none"/>
+
+        <rect x="568" y="20" width="118" height="72" rx="2" fill="#111118" stroke="#bb9af7" stroke-width="1"/>
+        <text x="627" y="48" class="label-mono" fill="#bb9af7" font-size="10" font-weight="600" text-anchor="middle">/api/assets/vectorize</text>
+        <text x="627" y="66" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">asset_id lookup</text>
+
+        <path d="M686,56 L700,56" stroke="#c9a227" stroke-width="1" marker-end="url(#assetArrow)" fill="none"/>
+
+        <rect x="706" y="20" width="118" height="72" rx="2" fill="#111118" stroke="#c9a227" stroke-width="1"/>
+        <text x="765" y="48" class="label-mono" fill="#c9a227" font-size="10" font-weight="600" text-anchor="middle">vtracer + sanitize</text>
+        <text x="765" y="66" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">Rive-safe SVG output</text>
+
+        <path d="M824,56 L838,56" stroke="#c9a227" stroke-width="1" marker-end="url(#assetArrow)" fill="none"/>
+
+        <rect x="844" y="20" width="118" height="72" rx="2" fill="#111118" stroke="#7aa2f7" stroke-width="1"/>
+        <text x="903" y="48" class="label-mono" fill="#7aa2f7" font-size="10" font-weight="600" text-anchor="middle">Clipboard Write</text>
+        <text x="903" y="66" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">SVG MIME + text fallback</text>
+
+        <path d="M962,56 L976,56" stroke="#c9a227" stroke-width="1" marker-end="url(#assetArrow)" fill="none"/>
+
+        <rect x="982" y="20" width="102" height="72" rx="2" fill="#111118" stroke="#2dd4bf" stroke-width="1"/>
+        <text x="1033" y="48" class="label-mono" fill="#2dd4bf" font-size="10" font-weight="600" text-anchor="middle">CDP Paste</text>
+        <text x="1033" y="66" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">focus + Paste command</text>
+
+        <path d="M1033,92 L1033,126 L191,126 L191,98" stroke="#f07171" stroke-width="1.5" marker-end="url(#assetArrow)" fill="none" stroke-dasharray="4,3"/>
+        <text x="614" y="118" class="label-mono" fill="#f07171" font-size="8" font-weight="500" text-anchor="middle">Import succeeds &rarr; capture fresh screenshot</text>
+        <text x="614" y="130" class="label-mono" fill="#f07171" font-size="8" font-weight="500" text-anchor="middle">&rarr; resume normal agent flow</text>
+
+        <rect x="16" y="160" width="1068" height="52" rx="2" fill="#14100e" stroke="#f07171" stroke-width="0.5"/>
+        <text x="32" y="183" class="label-mono" fill="#f07171" font-size="9" font-weight="600">PIPELINE GUARDRAILS</text>
+        <text x="178" y="183" class="label-mono" fill="#6b6560" font-size="9">preview timeout surfaced to sidebar</text>
+        <text x="418" y="183" class="label-mono" fill="#6b6560" font-size="9">503 overload surfaced as friendly error</text>
+        <text x="666" y="183" class="label-mono" fill="#6b6560" font-size="9">SVG complexity checked during sanitization</text>
+        <text x="32" y="201" class="label-mono" fill="#3d3a36" font-size="8">rich SVG MIME when available, text/plain fallback otherwise</text>
+
+        <rect x="16" y="230" width="1068" height="44" rx="2" fill="#111118" stroke="#2a2a35" stroke-width="0.5"/>
+        <text x="32" y="250" class="label-mono" fill="#c9a227" font-size="9" font-weight="600">HANDOFF</text>
+        <text x="118" y="246" class="label-mono" fill="#3d3a36" font-size="8">Sidebar captures a fresh screenshot after paste.</text>
+        <text x="118" y="259" class="label-mono" fill="#3d3a36" font-size="8">User can immediately ask the agent to animate the imported asset.</text>
+      </svg>
+    </div>
+  </div>
+
+  <!-- ========== THREE MODES ========== -->
+  <div class="section">
+    <div class="section-label">05 &mdash; Modes</div>
+    <div class="section-title">Three Operating Modes</div>
+    <div class="modes-grid">
+      <div class="mode-card">
+        <div class="mode-number">01</div>
+        <div class="mode-name">Ask</div>
+        <div class="mode-desc">Freeform Q&amp;A. User asks, agent answers based on screenshot context and Rive documentation.</div>
+        <div class="mode-flow">
+          <div class="step">User question + auto-screenshot</div>
+          <div class="arrow">&darr;</div>
+          <div class="step">Gemini analyzes screenshot</div>
+          <div class="arrow">&darr;</div>
+          <div class="step">lookup_rive_docs() for grounding</div>
+          <div class="arrow">&darr;</div>
+          <div class="step">Text response to sidebar</div>
+        </div>
+      </div>
+      <div class="mode-card">
+        <div class="mode-number">02</div>
+        <div class="mode-name">Collaborative</div>
+        <div class="mode-desc">Agent guides with visual cursors, user performs actions. Step-by-step verification flow.</div>
+        <div class="mode-flow">
+          <div class="step">start_task(steps)</div>
+          <div class="arrow">&darr;</div>
+          <div class="step">Agent: "Click here" + CURSOR tag</div>
+          <div class="arrow">&darr;</div>
+          <div class="step">Pulsing cursor appears on canvas</div>
+          <div class="arrow">&darr;</div>
+          <div class="step">User clicks &rarr; "done"</div>
+          <div class="arrow">&darr;</div>
+          <div class="step">verify_step() &rarr; advance_task()</div>
+        </div>
+      </div>
+      <div class="mode-card">
+        <div class="mode-number">03</div>
+        <div class="mode-name">Agentic</div>
+        <div class="mode-desc">Agent executes actions directly on the canvas via CDP. User watches or intervenes.</div>
+        <div class="mode-flow">
+          <div class="step">start_task(steps)</div>
+          <div class="arrow">&darr;</div>
+          <div class="step">Agent emits ACTION tag</div>
+          <div class="arrow">&darr;</div>
+          <div class="step">CDP dispatches trusted event</div>
+          <div class="arrow">&darr;</div>
+          <div class="step">Wait 800ms &rarr; screenshot</div>
+          <div class="arrow">&darr;</div>
+          <div class="step">Agent verifies &rarr; next action</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== CDP ACTIONS ========== -->
+  <div class="section">
+    <div class="section-label">06 &mdash; Actions</div>
+    <div class="section-title">CDP Action Types</div>
+    <p style="font-size: 14px; color: var(--text-muted); font-weight: 300; margin-bottom: 24px;">All actions dispatched via Chrome Debugger API producing trusted browser events. Critical for Flutter Web which ignores synthetic JavaScript events.</p>
+    <div class="action-grid">
+      <div class="action-card">
+        <h4>click / doubleclick</h4>
+        <p>mousePressed + mouseReleased at (x%, y%). Doubleclick uses 3-phase: click to select, 400ms pause, then double-click for rename/edit mode.</p>
+      </div>
+      <div class="action-card">
+        <h4>key</h4>
+        <p>keyDown + keyUp with modifier support (meta, ctrl, shift, alt). Preferred over clicking toolbar icons which are small and tightly spaced.</p>
+      </div>
+      <div class="action-card">
+        <h4>type</h4>
+        <p>Atomic field entry: triple-click to focus + select all, verify text field focused, Backspace, Input.insertText, Enter. Safe for canvas apps.</p>
+      </div>
+      <div class="action-card">
+        <h4>drag</h4>
+        <p>mousePressed at start, 10 animated mouseMoved steps at 30ms intervals, mouseReleased at end. Used for drawing shapes and creating transitions.</p>
+      </div>
+      <div class="action-card">
+        <h4>hover</h4>
+        <p>mouseMoved without clicking + 500ms wait. Triggers hidden UI elements like state machine connector dots that only appear on hover.</p>
+      </div>
+      <div class="action-card">
+        <h4>wait</h4>
+        <p>Configurable delay for UI transitions to complete. No browser interaction dispatched. Used between complex action sequences.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== FILE STRUCTURE ========== -->
+  <div class="section">
+    <div class="section-label">07 &mdash; Structure</div>
+    <div class="section-title">Project Files</div>
+    <div class="file-tree-box">
+      <span class="ft-dir">rive-navigator/</span><br>
+      <span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-dir">agent/</span> <span class="ft-comment">&mdash; Python backend (the "brain")</span><br>
+      <span class="ft-line">&#9474;</span>&nbsp;&nbsp; <span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">__init__.py</span> <span class="ft-comment">&mdash; exports root_agent</span><br>
+      <span class="ft-line">&#9474;</span>&nbsp;&nbsp; <span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">agent.py</span> <span class="ft-comment">&mdash; ADK root agent, model-selectable runners, Flash default</span><br>
+      <span class="ft-line">&#9474;</span>&nbsp;&nbsp; <span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">prompting.py</span> <span class="ft-comment">&mdash; runtime context engine, core Rive ops, procedure cards, output contracts</span><br>
+      <span class="ft-line">&#9474;</span>&nbsp;&nbsp; <span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">output_parser.py</span> <span class="ft-comment">&mdash; ACTION/CURSOR normalization, drag alias handling, safety validation</span><br>
+      <span class="ft-line">&#9474;</span>&nbsp;&nbsp; <span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">asset_pipeline.py</span> <span class="ft-comment">&mdash; preview generation, vectorization, generated asset workspace</span><br>
+      <span class="ft-line">&#9474;</span>&nbsp;&nbsp; <span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">svg_sanitizer.py</span> <span class="ft-comment">&mdash; strips unsupported SVG features, enforces Rive-safe output</span><br>
+      <span class="ft-line">&#9474;</span>&nbsp;&nbsp; <span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">server.py</span> <span class="ft-comment">&mdash; FastAPI: /chat, /assets/preview, /assets/vectorize, /tts, /health</span><br>
+      <span class="ft-line">&#9474;</span>&nbsp;&nbsp; <span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">.env</span> <span class="ft-comment">&mdash; GOOGLE_API_KEY (gitignored)</span><br>
+      <span class="ft-line">&#9474;</span>&nbsp;&nbsp; <span class="ft-line">&#9492;&#9472;&#9472;</span> <span class="ft-dir">tools/</span><br>
+      <span class="ft-line">&#9474;</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">screenshot_analyzer.py</span> <span class="ft-comment">&mdash; records observations, tracks steps</span><br>
+      <span class="ft-line">&#9474;</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">rive_docs_lookup.py</span> <span class="ft-comment">&mdash; section-level search, extracted steps, image refs, scoring</span><br>
+      <span class="ft-line">&#9474;</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">task_manager.py</span> <span class="ft-comment">&mdash; task state, step sanitization, rename-safety rules</span><br>
+      <span class="ft-line">&#9474;</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="ft-line">&#9492;&#9472;&#9472;</span> <span class="ft-file">guidance.py</span> <span class="ft-comment">&mdash; next step suggestions</span><br>
+      <span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-dir">chrome-extension/</span> <span class="ft-comment">&mdash; the "eyes + hands + UI"</span><br>
+      <span class="ft-line">&#9474;</span>&nbsp;&nbsp; <span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">manifest.json</span> <span class="ft-comment">&mdash; MV3: sidePanel, debugger, clipboardWrite, activeTab</span><br>
+      <span class="ft-line">&#9474;</span>&nbsp;&nbsp; <span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">background.js</span> <span class="ft-comment">&mdash; CDP engine, screenshot capture, API relay, trusted SVG paste</span><br>
+      <span class="ft-line">&#9474;</span>&nbsp;&nbsp; <span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">content.js</span> <span class="ft-comment">&mdash; cursor overlay, subtitle, push-to-talk, voice STT (577 lines)</span><br>
+      <span class="ft-line">&#9474;</span>&nbsp;&nbsp; <span class="ft-line">&#9492;&#9472;&#9472;</span> <span class="ft-dir">sidebar/</span><br>
+      <span class="ft-line">&#9474;</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">sidebar.html</span> <span class="ft-comment">&mdash; chat UI layout</span><br>
+      <span class="ft-line">&#9474;</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">sidebar-glass.css</span> <span class="ft-comment">&mdash; default glass theme styling</span><br>
+      <span class="ft-line">&#9474;</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="ft-line">&#9492;&#9472;&#9472;</span> <span class="ft-file">sidebar.js</span> <span class="ft-comment">&mdash; chat logic, model toggle, Nano Banana SVG workflow, agentic loop</span><br>
+      <span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-dir">rive-docs/</span> <span class="ft-comment">&mdash; cloned Rive documentation (285 .mdx files)</span><br>
+      <span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-dir">generated_assets/</span> <span class="ft-comment">&mdash; preview PNGs, vectorized SVGs, sanitized SVGs, metadata</span><br>
+      <span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-dir">debug_screenshots/</span> <span class="ft-comment">&mdash; optional PNG saves for debugging</span><br>
+      <span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">requirements.txt</span> <span class="ft-comment">&mdash; google-adk, google-genai, fastapi, uvicorn, dotenv</span><br>
+      <span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">Dockerfile</span> <span class="ft-comment">&mdash; Cloud Run backend image (should include vtracer for SVG pipeline)</span><br>
+      <span class="ft-line">&#9492;&#9472;&#9472;</span> <span class="ft-file">SETUP.md</span> <span class="ft-comment">&mdash; getting started guide</span>
+    </div>
+  </div>
+
+  <!-- ========== FEATURES ========== -->
+  <div class="section">
+    <div class="section-label">08 &mdash; Capabilities</div>
+    <div class="section-title">Features</div>
+    <div class="features-split">
+      <div>
+        <div class="feature-col-title fn">Functional</div>
+        <div class="feature-item">
+          <h4>Vision-Based Rive Navigation</h4>
+          <p>Gemini multimodal vision identifies panels, selected objects, active tools, animation state, and spatial positions in the Rive editor, then emits validated CURSOR or ACTION contracts.</p>
+        </div>
+        <div class="feature-item">
+          <h4>Step-by-Step Task Guidance</h4>
+          <p>Structured task plans with progress tracking, step verification, back/skip/end controls, and explicit core-editor guidance so Flash has a strong baseline even before targeted retrieval kicks in.</p>
+        </div>
+        <div class="feature-item">
+          <h4>Nano Banana SVG Generator</h4>
+          <p>A dedicated asset workflow generates a concept preview, lets the user approve it, traces the image with <code>vtracer</code>, sanitizes the SVG, and pastes it directly into Rive for immediate animation.</p>
+        </div>
+        <div class="feature-item">
+          <h4>Documentation Grounding</h4>
+          <p>Section-level index of 285 Rive .mdx files with multi-factor scoring, step extraction, visual-dependency detection, and image reference attachment. Prevents hallucination by grounding answers in official docs.</p>
+        </div>
+      </div>
+      <div>
+        <div class="feature-col-title nf">Non-Functional</div>
+        <div class="feature-item">
+          <h4>Audio Narration</h4>
+          <p>Gemini TTS with sentence pipelining for low-latency playback. Pre-fetches next sentence while current plays. Subtitle overlay on canvas.</p>
+        </div>
+        <div class="feature-item">
+          <h4>Push-to-Talk Voice</h4>
+          <p>Hold Ctrl+Space for hands-free input &mdash; pulsing mic overlay with live transcript on the Rive canvas. Web Speech API runs in the content script (sidepanels lack mic access), with results relayed via chrome.runtime messaging. Enables a fully text-free voice-in &rarr; voice-out workflow.</p>
+        </div>
+        <div class="feature-item">
+          <h4>Safety &amp; Robustness</h4>
+          <p>Action limit (150), stuck detection (2 repeats), invalid-action recovery, coordinate validation (% vs px), text field focus verification before destructive keystrokes, and agent-side restrictions for high-risk rename flows.</p>
+        </div>
+        <div class="feature-item">
+          <h4>Import Reliability</h4>
+          <p>SVG import uses rich clipboard MIME data with text fallback, explicit CDP Paste commands, tab/window focus restoration, and post-import screenshot capture so the agent continues from the real editor state.</p>
+        </div>
+        <div class="feature-item">
+          <h4>Debug Observability</h4>
+          <p>Detailed request/response logging, event-by-event agent execution tracing, asset preview timeout handling, upstream overload surfacing, and optional screenshot persistence for debugging.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== DEPLOYMENT ========== -->
+  <div class="section">
+    <div class="section-label">09 &mdash; Deploy</div>
+    <div class="section-title">Deployment</div>
+    <div class="deploy-cols">
+      <div class="deploy-col">
+        <h3>Local Development</h3>
+        <div class="d-step">
+          <div class="d-num">1</div>
+          <div class="d-text"><strong>Python venv</strong> &mdash; <code>python3 -m venv venv &amp;&amp; source venv/bin/activate &amp;&amp; pip install -r requirements.txt &amp;&amp; pip install vtracer</code></div>
+        </div>
+        <div class="d-step">
+          <div class="d-num">2</div>
+          <div class="d-text"><strong>API key</strong> &mdash; Set <code>GOOGLE_API_KEY</code> in <code>agent/.env</code></div>
+        </div>
+        <div class="d-step">
+          <div class="d-num">3</div>
+          <div class="d-text"><strong>Start backend</strong> &mdash; <code>python -m uvicorn agent.server:app --reload --port 8000</code></div>
+        </div>
+        <div class="d-step">
+          <div class="d-num">4</div>
+          <div class="d-text"><strong>Load extension</strong> &mdash; <code>chrome://extensions</code> &rarr; Developer Mode &rarr; Load unpacked &rarr; <code>chrome-extension/</code></div>
+        </div>
+        <div class="d-step">
+          <div class="d-num">5</div>
+          <div class="d-text"><strong>Open Rive</strong> &mdash; Navigate to rive.app, click extension icon to open sidebar, then test both chat and the Nano Banana SVG Generator</div>
+        </div>
+      </div>
+      <div class="context-divider"></div>
+      <div class="deploy-col">
+        <h3>Production</h3>
+        <div class="d-step">
+          <div class="d-num">1</div>
+          <div class="d-text"><strong>Docker image</strong> &mdash; Build the FastAPI backend for Cloud Run and include the vectorization dependency so <code>/api/assets/vectorize</code> works in production too.</div>
+        </div>
+        <div class="d-step">
+          <div class="d-num">2</div>
+          <div class="d-text"><strong>Deploy</strong> &mdash; <code>gcloud run deploy rive-navigator --source . --region us-central1</code></div>
+        </div>
+        <div class="d-step">
+          <div class="d-num">3</div>
+          <div class="d-text"><strong>Env vars</strong> &mdash; Set <code>GOOGLE_API_KEY</code> plus runtime knobs like <code>ASSET_PREVIEW_TIMEOUT_SECONDS</code> and doc-image attachment flags as needed.</div>
+        </div>
+        <div class="d-step">
+          <div class="d-num">4</div>
+          <div class="d-text"><strong>Update extension</strong> &mdash; Point the extension API URL at Cloud Run and package the extension as an unpacked test build or optional unlisted Chrome Web Store listing for judges.</div>
+        </div>
+        <div class="d-step">
+          <div class="d-num">5</div>
+          <div class="d-text"><strong>Judge-ready demo</strong> &mdash; Show both flows: vision-guided editor control and prompt-to-SVG import followed by animation inside the same live session.</div>
+        </div>
+        <div class="prereq-list">
+          <h4>Prerequisites</h4>
+          <ul>
+            <li>Python 3.11+</li>
+            <li>Google Chrome 114+ (sidePanel API)</li>
+            <li>Gemini API key (free tier available)</li>
+            <li><code>vtracer</code> available in the backend environment for SVG generation</li>
+            <li>Google Cloud account (for production deployment)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== FOOTER ========== -->
+  <div class="footer">
+    <div class="footer-line">Rive Navigator &mdash; Architecture Document &mdash; March 2026</div>
+  </div>
+
+</div>
+</body>
+</html>

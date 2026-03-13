@@ -1,0 +1,136 @@
+---
+title: Context
+---
+
+Context is an object provided to scripted nodes during initialization (via the `init` function).
+It serves as a bridge between your script and the Rive runtime, giving you access to:
+- Update scheduling — Request that your node be updated on the next frame.
+- Data (ViewModels) — Access the ViewModel data context bound to the node or the root artboard.
+- Assets — Retrieve named assets (images, blobs, and audio) that have been added to the Rive file.
+
+
+## Methods
+
+### `markNeedsUpdate`
+
+Marks the object as needing an update on the next frame.
+Call this when something has changed (e.g., from a listener callback) and you need the runtime to re-invoke your node's update function.
+```lua highlight={11}
+function init(self: MyNode, context: Context): boolean
+    self.context = context
+    -- Access a ViewModel property and listen for changes
+    local vm = context:viewModel()
+    if vm then
+        local name = vm:getString("name")
+        if name then
+            name:addListener(function()
+                -- Re-trigger update when the data changes
+                if self.context then
+                    self.context:markNeedsUpdate()
+                end
+            end)
+        end
+    end
+    return true
+end
+```
+
+
+### `viewModel`
+
+Returns the [ViewModel](/scripting/api-reference/interfaces/view-model) bound to the node's immediate data context. This is the most common way
+to read data-bound properties from a script.
+```lua highlight={2}
+function init(self: MyNode, context: Context): boolean
+  local vmi = context:viewModel()
+  if vmi then
+    local cannon = vmi:getTrigger('cannon')
+  end
+
+  return true
+end
+```
+
+
+### `rootViewModel`
+
+Returns the [ViewModel](/scripting/api-reference/interfaces/view-model) bound to the root artboard's data context.
+Useful when you need to access top-level data from a deeply nested node.
+```lua highlight={2}
+function init(self: MyNode, context: Context): boolean
+  local vmi = context:rootViewModel()
+  if vmi then
+    local cannon = vmi:getTrigger('cannon')
+  end
+
+  return true
+end
+```
+
+
+### `dataContext`
+
+Returns the data context provided to this node.
+```lua highlight={2}
+function init(self: MyNode, context: Context): boolean
+  local dc = context:dataContext()
+  if dc then
+     local parentDC = dc:parent()
+     local vm = dc:viewModel()
+  end
+
+  return true
+end
+```
+
+
+### `image`
+
+Returns an image asset by name, or nil if not found.
+The returned [Image](/scripting/api-reference/image/image) can be drawn via `drawImage`.
+
+See also [ImageSampler](/scripting/api-reference/image/image-sampler).
+
+Check out [Scripting demos](https://rive.app/docs/scripting/demos) to see a working example.
+
+```lua highlight={7,15}
+type DrawImage = {
+  myImage: Image?,
+  sampler: ImageSampler?,
+}
+
+function init(self: DrawImage, context: Context): boolean
+  self.myImage = context:image('myImage')
+  self.sampler = ImageSampler('clamp', 'clamp', 'bilinear')
+
+  return true
+end
+
+function draw(self: DrawImage, renderer: Renderer)
+  if self.myImage and self.sampler then
+    renderer:drawImage(self.myImage, self.sampler, 'srcOver', 1)
+  end
+end
+
+return function(): Node<DrawImage>
+  return {
+    myImage = nil,
+    sampler = nil,
+    init = init,
+    draw = draw,
+  }
+end
+```
+
+
+### `blob`
+
+Returns a [Blob](/scripting/api-reference/interfaces/blob) (raw binary data) asset by name, or nil if not found.
+Useful for loading custom data files embedded in the Rive file.
+
+
+### `audio`
+
+Returns an [AudioSource](/scripting/api-reference/interfaces/audio-source) asset by name. The returned source can be played using the global `Audio` API.
+
+

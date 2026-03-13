@@ -1,0 +1,50 @@
+---
+title: 'Scale Constraint'
+description: "The Scale Constraint allows you to set limits on an object's scale and/or copy the scale properties from a target object. These properties can be independently activated."
+---
+
+import { YouTube } from '/snippets/youtube.mdx'
+
+<YouTube id="4fFuGQHAiIQ" />
+
+## How to create a Scale Constraint 
+
+<Steps>
+    <Step title="Add a Scale Constraint to an object">
+        Use the Constraints section of the Inspector to add a Scale Constraint to an object.
+
+        ![Image](https://ucarecdn.com/ae4a6d01-89b4-423d-988d-73a7094e4d8a/)
+    </Step>
+    <Step title="Choose a target">
+        ![Image](https://ucarecdn.com/dde72565-7f0f-447b-a98a-3cc33c55c79a/)
+
+        Use the new constraint's fly-out menu to select a target for this constraint.
+
+        ![Image](https://ucarecdn.com/52454a24-75d9-464b-8c8e-29de2e620b8a/)
+    </Step>
+    <Step title="Test that the Scale Constraint is working">
+        Manipulating the target object now causes the constrained object to Scale properties.
+    </Step>
+</Steps>
+
+## Strength 
+
+The Strength property determines how much the constrained object is affected.
+
+A Strength of 0% means the constraint won't have any effect.
+
+A Strength of 50% means half the value from the target will be applied.
+
+## Transform Space 
+
+### Source Space 
+
+Choose whether this constraint should use World or Local coordinates for the Source Space.
+
+### Destination Space 
+
+Choose whether this constraint should use World or Local coordinates for the Destination Space.
+
+### Min/Max Space 
+
+Choose whether this constraint should use World or Local coordinates for the Min/Max Space.

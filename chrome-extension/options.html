@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rive Navigator Options</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main class="options-shell">
+    <section class="options-card">
+      <h1>Rive Navigator Backend</h1>
+      <p class="options-copy">
+        Set the API base URL used by the extension. Leave it on localhost for local development,
+        or point it at your deployed Cloud Run backend.
+      </p>
+
+      <label class="field">
+        <span>Backend API URL</span>
+        <input id="agentApiUrl" type="url" placeholder="http://localhost:8000" spellcheck="false">
+      </label>
+
+      <div class="actions">
+        <button id="saveBtn" class="primary-btn">Save</button>
+        <button id="resetBtn" class="secondary-btn">Reset to Localhost</button>
+      </div>
+
+      <p id="status" class="status" aria-live="polite"></p>
+    </section>
+  </main>
+
+  <script src="options.js"></script>
+</body>
+</html>
