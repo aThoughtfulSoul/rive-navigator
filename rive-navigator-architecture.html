@@ -608,7 +608,7 @@
 
   <!-- ========== HERO ========== -->
   <div class="hero">
-    <div class="hero-eyebrow">Gemini Hackathon 2026</div>
+    <div class="hero-eyebrow">Gemini Live Agents Hackathon 2026</div>
     <h1>Rive<br><em>Navigator</em></h1>
     <p class="hero-desc">An AI co-pilot for Rive with two core loops: a vision-based UI agent that understands and operates the editor in real time, and a Nano Banana SVG Generator that turns prompts into concept art, traces it into sanitized SVG, pastes it into Rive, and hands off to the animation agent. Fully voice-enabled with push-to-talk input and sentence-pipelined audio narration for a text-free workflow.</p>
     <div class="hero-tags">
@@ -647,7 +647,7 @@
         </ul>
         <h3>Key Differentiators</h3>
         <ul>
-          <li>Multimodal vision&mdash;Gemini analyzes live editor screenshots and grounds decisions in current UI state</li>
+          <li>Multimodal vision&mdash;Gemini analyzes live editor screenshots to understand panels, tools, and spatial layout</li>
           <li>Agentic control&mdash;AI executes clicks, keystrokes, typing, hover, drags, and paste commands directly via CDP</li>
           <li>Prompt-to-SVG creation&mdash;Nano Banana SVG Generator produces concept art, vectorizes it, sanitizes it, and imports it into Rive</li>
           <li>Runtime context engine&mdash;small stable policy + per-turn procedure cards + output contracts tuned for Flash reliability</li>
@@ -796,10 +796,12 @@
         <text x="812" y="274" class="label-mono" fill="#3d3a36" font-size="8">action caps &middot; retries &middot; paste handoff</text>
 
         <!-- Chrome internal arrows -->
-        <path d="M332,165 L380,165" stroke="#c9a227" stroke-width="1" marker-end="url(#a-gold)" fill="none"/>
         <path d="M380,145 L332,145" stroke="#7aa2f7" stroke-width="1" marker-end="url(#a-sky)" fill="none"/>
+        <path d="M380,158 L332,158" stroke="#c9a227" stroke-width="1" marker-end="url(#a-gold)" fill="none"/>
+        <path d="M332,172 L380,172" stroke="#2dd4bf" stroke-width="1" marker-end="url(#a-teal)" fill="none"/>
         <text x="340" y="140" class="label-mono" fill="#3d3a36" font-size="7">CDP actions</text>
-        <text x="340" y="178" class="label-mono" fill="#3d3a36" font-size="7">overlays</text>
+        <text x="340" y="155" class="label-mono" fill="#3d3a36" font-size="7">overlays + subtitles</text>
+        <text x="340" y="183" class="label-mono" fill="#3d3a36" font-size="7">voice relay</text>
 
         <path d="M680,188 L714,188" stroke="#bb9af7" stroke-width="1" marker-end="url(#a-lav)" fill="none"/>
         <path d="M714,216 L680,216" stroke="#2dd4bf" stroke-width="1" marker-end="url(#a-teal)" fill="none"/>
@@ -818,7 +820,8 @@
         <text x="48" y="460" class="label-mono" fill="#6b6560" font-size="10">POST /api/chat</text>
         <text x="48" y="476" class="label-mono" fill="#6b6560" font-size="10">POST /api/assets/preview</text>
         <text x="48" y="492" class="label-mono" fill="#6b6560" font-size="10">POST /api/assets/vectorize</text>
-        <text x="48" y="508" class="label-mono" fill="#3d3a36" font-size="10">POST /api/tts  &middot;  GET /api/health</text>
+        <text x="48" y="505" class="label-mono" fill="#3d3a36" font-size="7.5">POST /api/tts  &middot;  POST /api/session/reset</text>
+        <text x="48" y="514" class="label-mono" fill="#3d3a36" font-size="7.5">GET /api/health</text>
 
         <!-- ADK Agent -->
         <rect x="280" y="398" width="250" height="120" rx="2" fill="#0e0e14" stroke="#bb9af7" stroke-width="0.5"/>
@@ -858,7 +861,7 @@
         <text x="842" y="554" class="label-mono" fill="#f07171" font-size="9" font-weight="500">Gemini Media Models</text>
         <text x="842" y="568" class="label-mono" fill="#3d3a36" font-size="8">pro-image + flash-tts</text>
 
-        <rect x="32" y="536" width="210" height="46" rx="2" fill="#0e0e14" stroke="#3d3a36" stroke-width="0.5"/>
+        <rect x="32" y="536" width="240" height="46" rx="2" fill="#0e0e14" stroke="#3d3a36" stroke-width="0.5"/>
         <text x="48" y="554" class="label-mono" fill="#a89f8f" font-size="9">asset_pipeline.py + svg_sanitizer.py</text>
         <text x="48" y="568" class="label-mono" fill="#6b6560" font-size="7">preview &rarr; vtracer &rarr; SVG &rarr; generated_assets/</text>
 
@@ -873,7 +876,7 @@
         <text x="280" y="327" class="label-mono" fill="#bb9af7" font-size="8" font-weight="500">HTTP POST screenshot + message or asset prompt</text>
 
         <path d="M947,398 L947,352 L630,352 L630,302" stroke="#2dd4bf" stroke-width="1.5" marker-end="url(#a-teal)" fill="none" stroke-dasharray="4,3"/>
-        <text x="732" y="370" class="label-mono" fill="#2dd4bf" font-size="8" font-weight="500">JSON response + actions + task state + asset ids</text>
+        <text x="650" y="370" class="label-mono" fill="#2dd4bf" font-size="8" font-weight="500">JSON response + actions + task state + asset ids</text>
 
         <!-- Gemini API -->
         <rect x="215" y="625" width="380" height="46" rx="2" fill="#1a1520" stroke="#bb9af7" stroke-width="1"/>
@@ -988,55 +991,54 @@
         </defs>
         <rect width="1100" height="290" fill="url(#assetGrid)"/>
 
-        <rect x="16" y="20" width="118" height="72" rx="2" fill="#111118" stroke="#7aa2f7" stroke-width="1"/>
-        <text x="75" y="48" class="label-mono" fill="#7aa2f7" font-size="10" font-weight="600" text-anchor="middle">Asset Prompt</text>
-        <text x="75" y="66" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">prompt + style preset</text>
+        <rect x="16" y="20" width="124" height="72" rx="2" fill="#111118" stroke="#7aa2f7" stroke-width="1"/>
+        <text x="78" y="48" class="label-mono" fill="#7aa2f7" font-size="10" font-weight="600" text-anchor="middle">Asset Prompt</text>
+        <text x="78" y="66" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">prompt + style preset</text>
 
-        <path d="M134,56 L148,56" stroke="#c9a227" stroke-width="1" marker-end="url(#assetArrow)" fill="none"/>
+        <path d="M140,56 L154,56" stroke="#c9a227" stroke-width="1" marker-end="url(#assetArrow)" fill="none"/>
 
-        <rect x="154" y="20" width="118" height="72" rx="2" fill="#111118" stroke="#bb9af7" stroke-width="1"/>
-        <text x="213" y="48" class="label-mono" fill="#bb9af7" font-size="10" font-weight="600" text-anchor="middle">/api/assets/preview</text>
-        <text x="213" y="66" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">timeout + friendly errors</text>
+        <rect x="154" y="20" width="124" height="72" rx="2" fill="#111118" stroke="#bb9af7" stroke-width="1"/>
+        <text x="216" y="48" class="label-mono" fill="#bb9af7" font-size="10" font-weight="600" text-anchor="middle">/api/assets/preview</text>
+        <text x="216" y="66" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">timeout + friendly errors</text>
 
-        <path d="M272,56 L286,56" stroke="#c9a227" stroke-width="1" marker-end="url(#assetArrow)" fill="none"/>
+        <path d="M278,56 L292,56" stroke="#c9a227" stroke-width="1" marker-end="url(#assetArrow)" fill="none"/>
 
-        <rect x="292" y="20" width="118" height="72" rx="2" fill="#111118" stroke="#f07171" stroke-width="1"/>
-        <text x="351" y="48" class="label-mono" fill="#f07171" font-size="10" font-weight="600" text-anchor="middle">Gemini Pro Image</text>
-        <text x="351" y="66" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">concept PNG preview</text>
+        <rect x="292" y="20" width="124" height="72" rx="2" fill="#111118" stroke="#f07171" stroke-width="1"/>
+        <text x="354" y="48" class="label-mono" fill="#f07171" font-size="10" font-weight="600" text-anchor="middle">Gemini Pro Image</text>
+        <text x="354" y="66" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">concept PNG preview</text>
 
-        <path d="M410,56 L424,56" stroke="#c9a227" stroke-width="1" marker-end="url(#assetArrow)" fill="none"/>
+        <path d="M416,56 L430,56" stroke="#c9a227" stroke-width="1" marker-end="url(#assetArrow)" fill="none"/>
 
-        <rect x="430" y="20" width="118" height="72" rx="2" fill="#111118" stroke="#2dd4bf" stroke-width="1"/>
-        <text x="489" y="48" class="label-mono" fill="#2dd4bf" font-size="10" font-weight="600" text-anchor="middle">Sidebar Preview</text>
-        <text x="489" y="66" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">regenerate / approve</text>
+        <rect x="430" y="20" width="124" height="72" rx="2" fill="#111118" stroke="#2dd4bf" stroke-width="1"/>
+        <text x="492" y="48" class="label-mono" fill="#2dd4bf" font-size="10" font-weight="600" text-anchor="middle">Sidebar Preview</text>
+        <text x="492" y="66" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">regenerate / approve</text>
 
-        <path d="M548,56 L562,56" stroke="#c9a227" stroke-width="1" marker-end="url(#assetArrow)" fill="none"/>
+        <path d="M554,56 L568,56" stroke="#c9a227" stroke-width="1" marker-end="url(#assetArrow)" fill="none"/>
 
-        <rect x="568" y="20" width="118" height="72" rx="2" fill="#111118" stroke="#bb9af7" stroke-width="1"/>
-        <text x="627" y="48" class="label-mono" fill="#bb9af7" font-size="10" font-weight="600" text-anchor="middle">/api/assets/vectorize</text>
-        <text x="627" y="66" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">asset_id lookup</text>
+        <rect x="568" y="20" width="124" height="72" rx="2" fill="#111118" stroke="#bb9af7" stroke-width="1"/>
+        <text x="630" y="48" class="label-mono" fill="#bb9af7" font-size="10" font-weight="600" text-anchor="middle">/api/assets/vectorize</text>
+        <text x="630" y="66" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">asset_id lookup</text>
 
-        <path d="M686,56 L700,56" stroke="#c9a227" stroke-width="1" marker-end="url(#assetArrow)" fill="none"/>
+        <path d="M692,56 L706,56" stroke="#c9a227" stroke-width="1" marker-end="url(#assetArrow)" fill="none"/>
 
-        <rect x="706" y="20" width="118" height="72" rx="2" fill="#111118" stroke="#c9a227" stroke-width="1"/>
-        <text x="765" y="48" class="label-mono" fill="#c9a227" font-size="10" font-weight="600" text-anchor="middle">vtracer + sanitize</text>
-        <text x="765" y="66" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">Rive-safe SVG output</text>
+        <rect x="706" y="20" width="124" height="72" rx="2" fill="#111118" stroke="#c9a227" stroke-width="1"/>
+        <text x="768" y="48" class="label-mono" fill="#c9a227" font-size="10" font-weight="600" text-anchor="middle">vtracer + sanitize</text>
+        <text x="768" y="66" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">Rive-safe SVG output</text>
 
-        <path d="M824,56 L838,56" stroke="#c9a227" stroke-width="1" marker-end="url(#assetArrow)" fill="none"/>
+        <path d="M830,56 L844,56" stroke="#c9a227" stroke-width="1" marker-end="url(#assetArrow)" fill="none"/>
 
-        <rect x="844" y="20" width="118" height="72" rx="2" fill="#111118" stroke="#7aa2f7" stroke-width="1"/>
-        <text x="903" y="48" class="label-mono" fill="#7aa2f7" font-size="10" font-weight="600" text-anchor="middle">Clipboard Write</text>
-        <text x="903" y="66" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">SVG MIME + text fallback</text>
+        <rect x="844" y="20" width="124" height="72" rx="2" fill="#111118" stroke="#7aa2f7" stroke-width="1"/>
+        <text x="906" y="48" class="label-mono" fill="#7aa2f7" font-size="10" font-weight="600" text-anchor="middle">Clipboard Write</text>
+        <text x="906" y="66" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">SVG MIME + text fallback</text>
 
-        <path d="M962,56 L976,56" stroke="#c9a227" stroke-width="1" marker-end="url(#assetArrow)" fill="none"/>
+        <path d="M968,56 L982,56" stroke="#c9a227" stroke-width="1" marker-end="url(#assetArrow)" fill="none"/>
 
-        <rect x="982" y="20" width="102" height="72" rx="2" fill="#111118" stroke="#2dd4bf" stroke-width="1"/>
-        <text x="1033" y="48" class="label-mono" fill="#2dd4bf" font-size="10" font-weight="600" text-anchor="middle">CDP Paste</text>
-        <text x="1033" y="66" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">focus + Paste command</text>
+        <rect x="982" y="20" width="108" height="72" rx="2" fill="#111118" stroke="#2dd4bf" stroke-width="1"/>
+        <text x="1036" y="48" class="label-mono" fill="#2dd4bf" font-size="10" font-weight="600" text-anchor="middle">CDP Paste</text>
+        <text x="1036" y="66" class="label-mono" fill="#3d3a36" font-size="8" text-anchor="middle">focus + Paste command</text>
 
-        <path d="M1033,92 L1033,126 L191,126 L191,98" stroke="#f07171" stroke-width="1.5" marker-end="url(#assetArrow)" fill="none" stroke-dasharray="4,3"/>
-        <text x="614" y="118" class="label-mono" fill="#f07171" font-size="8" font-weight="500" text-anchor="middle">Import succeeds &rarr; capture fresh screenshot</text>
-        <text x="614" y="130" class="label-mono" fill="#f07171" font-size="8" font-weight="500" text-anchor="middle">&rarr; resume normal agent flow</text>
+        <path d="M1036,92 L1036,126 L191,126 L191,98" stroke="#f07171" stroke-width="1.5" marker-end="url(#assetArrow)" fill="none" stroke-dasharray="4,3"/>
+        <text x="614" y="119" class="label-mono" fill="#f07171" font-size="7.5" font-weight="500" text-anchor="middle">Import succeeds &rarr; capture fresh screenshot &rarr; resume normal agent flow</text>
 
         <rect x="16" y="160" width="1068" height="52" rx="2" fill="#14100e" stroke="#f07171" stroke-width="0.5"/>
         <text x="32" y="183" class="label-mono" fill="#f07171" font-size="9" font-weight="600">PIPELINE GUARDRAILS</text>
@@ -1158,12 +1160,11 @@
       <span class="ft-line">&#9474;</span>&nbsp;&nbsp; <span class="ft-line">&#9492;&#9472;&#9472;</span> <span class="ft-dir">tools/</span><br>
       <span class="ft-line">&#9474;</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">screenshot_analyzer.py</span> <span class="ft-comment">&mdash; records observations, tracks steps</span><br>
       <span class="ft-line">&#9474;</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">rive_docs_lookup.py</span> <span class="ft-comment">&mdash; section-level search, extracted steps, image refs, scoring</span><br>
-      <span class="ft-line">&#9474;</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">task_manager.py</span> <span class="ft-comment">&mdash; task state, step sanitization, rename-safety rules</span><br>
-      <span class="ft-line">&#9474;</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="ft-line">&#9492;&#9472;&#9472;</span> <span class="ft-file">guidance.py</span> <span class="ft-comment">&mdash; next step suggestions</span><br>
+      <span class="ft-line">&#9474;</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="ft-line">&#9492;&#9472;&#9472;</span> <span class="ft-file">task_manager.py</span> <span class="ft-comment">&mdash; task state, step sanitization, rename-safety rules</span><br>
       <span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-dir">chrome-extension/</span> <span class="ft-comment">&mdash; the "eyes + hands + UI"</span><br>
       <span class="ft-line">&#9474;</span>&nbsp;&nbsp; <span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">manifest.json</span> <span class="ft-comment">&mdash; MV3: sidePanel, debugger, clipboardWrite, activeTab</span><br>
       <span class="ft-line">&#9474;</span>&nbsp;&nbsp; <span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">background.js</span> <span class="ft-comment">&mdash; CDP engine, screenshot capture, API relay, trusted SVG paste</span><br>
-      <span class="ft-line">&#9474;</span>&nbsp;&nbsp; <span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">content.js</span> <span class="ft-comment">&mdash; cursor overlay, subtitle, push-to-talk, voice STT (577 lines)</span><br>
+      <span class="ft-line">&#9474;</span>&nbsp;&nbsp; <span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">content.js</span> <span class="ft-comment">&mdash; cursor overlay, subtitle, push-to-talk, voice STT (574 lines)</span><br>
       <span class="ft-line">&#9474;</span>&nbsp;&nbsp; <span class="ft-line">&#9492;&#9472;&#9472;</span> <span class="ft-dir">sidebar/</span><br>
       <span class="ft-line">&#9474;</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">sidebar.html</span> <span class="ft-comment">&mdash; chat UI layout</span><br>
       <span class="ft-line">&#9474;</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="ft-line">&#9500;&#9472;&#9472;</span> <span class="ft-file">sidebar-glass.css</span> <span class="ft-comment">&mdash; default glass theme styling</span><br>
