@@ -12,6 +12,7 @@ import os
 import time
 import uuid
 import wave
+from collections import OrderedDict
 from pathlib import Path
 from typing import Optional
 
@@ -94,11 +95,38 @@ except Exception as e:
     tts_available = False
     log.warning(f"Gemini TTS not available: {e}")
 
-# Track active sessions
-active_sessions: dict[str, bool] = {}
+# Track active sessions with TTL eviction
+MAX_SESSIONS = int(os.getenv("MAX_SESSIONS", "200"))
+SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", "7200"))  # 2 hours
+MAX_SCREENSHOT_BYTES = int(os.getenv("MAX_SCREENSHOT_BYTES", str(10 * 1024 * 1024)))  # 10 MB
+
+# OrderedDict gives us insertion-order for LRU-style eviction
+active_sessions: OrderedDict[str, float] = OrderedDict()  # session_id -> last_access_time
+
 save_debug_screenshots = os.getenv("SAVE_DEBUG_SCREENSHOTS", "0") == "1"
 attach_rive_doc_images = os.getenv("ATTACH_RIVE_DOC_IMAGES", "1") == "1"
 asset_preview_timeout_seconds = float(os.getenv("ASSET_PREVIEW_TIMEOUT_SECONDS", "75"))
+
+
+def _touch_session(session_id: str) -> None:
+    """Mark a session as recently used and evict stale/overflow sessions."""
+    now = time.time()
+    active_sessions[session_id] = now
+    active_sessions.move_to_end(session_id)
+
+    # Evict expired sessions
+    expired = [
+        sid for sid, ts in active_sessions.items()
+        if now - ts > SESSION_TTL_SECONDS
+    ]
+    for sid in expired:
+        active_sessions.pop(sid, None)
+        log.info(f"🗑️  Evicted expired session: {sid[:20]}...")
+
+    # Evict oldest if over capacity
+    while len(active_sessions) > MAX_SESSIONS:
+        evicted_sid, _ = active_sessions.popitem(last=False)
+        log.info(f"🗑️  Evicted oldest session (capacity): {evicted_sid[:20]}...")
 
 
 # ============ Request/Response Models ============
@@ -210,9 +238,10 @@ async def chat(request: ChatRequest):
                 session_id=session_id,
                 state=session_state,
             )
-            active_sessions[session_id] = True
+            _touch_session(session_id)
         else:
             log.info(f"♻️  Reusing session: {session_id[:20]}...")
+            _touch_session(session_id)
             # Update task_mode in session state (user can switch mid-task)
             session = await session_service.get_session(
                 app_name="rive_navigator",
@@ -230,7 +259,7 @@ async def chat(request: ChatRequest):
                     session_id=session_id,
                     state=session_state,
                 )
-                active_sessions[session_id] = True
+                _touch_session(session_id)
         if session_state is not None:
             session_state["task_mode"] = request_task_mode
 
@@ -258,7 +287,12 @@ async def chat(request: ChatRequest):
         parts.append(types.Part.from_text(text=f"[USER REQUEST]\n{request.message}"))
 
         # Add screenshot if provided
-        if request.screenshot:
+        if request.screenshot and len(request.screenshot) > MAX_SCREENSHOT_BYTES:
+            log.warning(
+                f"⚠️  Screenshot too large ({len(request.screenshot) // 1024} KB), "
+                f"limit is {MAX_SCREENSHOT_BYTES // 1024} KB — skipping"
+            )
+        elif request.screenshot:
             image_bytes = _decode_screenshot(request.screenshot)
             if image_bytes:
                 log.info(f"🖼️  Screenshot decoded: {len(image_bytes) // 1024} KB")
@@ -417,7 +451,7 @@ async def chat(request: ChatRequest):
     except Exception as e:
         elapsed = time.time() - request_start
         log.error(f"❌ ERROR after {elapsed:.1f}s: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred. Check server logs for details.")
 
 
 @app.get("/api/health")
@@ -509,12 +543,12 @@ async def reset_session(session_id: str, user_id: str = "default_user"):
             session_id=session_id,
             state=_default_session_state("collaborative"),
         )
-        active_sessions[session_id] = True
+        _touch_session(session_id)
 
         return {"status": "ok", "session_id": session_id}
     except Exception as e:
         log.error(f"❌ Session reset failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Session reset failed.")
 
 
 # ============ TTS Endpoint ============
@@ -627,7 +661,7 @@ async def text_to_speech(request: TTSRequest):
 
     except Exception as e:
         log.error(f"❌ TTS failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"TTS failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="TTS generation failed. Check server logs for details.")
 
 
 # ============ Helper Functions ============

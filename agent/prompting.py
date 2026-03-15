@@ -4,9 +4,12 @@ Prompt and runtime-context helpers for the Rive Navigator agent.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from .tools.rive_docs_lookup import search_rive_docs
+
+logger = logging.getLogger(__name__)
 
 BASE_AGENT_POLICY = """You are Rive UI Navigator, an expert assistant for the Rive editor.
 
@@ -26,11 +29,24 @@ Core operating rules:
 - If the target is visually unclear, say so instead of guessing.
 - Prefer keyboard shortcuts over clicking small toolbar icons.
 - If a standard Rive shortcut exists for the exact tool or mode change, default to a `key` ACTION unless text input is active or that shortcut already failed.
+- For basic shape creation, a failed drag does not mean the shortcut failed. Keep using `O` for Ellipse and `R` for Rectangle unless the screenshot clearly shows the wrong tool is active or text input focus would capture the key.
+- If drawing a basic shape fails, recover by reselecting the artboard or clicking blank stage, pressing the shape shortcut again, and retrying the drag inside the artboard before falling back to toolbar clicks.
+- Never use `Shift+L` or wrap/convert objects into Layouts (Row, Column, Layout containers) unless the task explicitly asks for a responsive layout. If an object unexpectedly changes its name to "Column", "Row", or "Layout", or its children become distorted, immediately undo with Cmd/Ctrl+Z.
 - Never rename timelines or state machines. Leave their default names unchanged and continue with the functional setup.
 - If a task step asks to rename a timeline or state machine, skip that rename portion instead of repeating clicks or double-clicks.
 - When editing Inspector values, prefer the atomic `type` action with coordinates.
 - Never use Cmd+A or Ctrl+A to select text in the editor.
 - If an action appears to fail, change strategy instead of repeating it.
+- Do not assume an object is selected unless the screenshot shows a clear selection cue such as stage handles, a changed Inspector, or an obvious hierarchy highlight.
+- If hierarchy selection is visually ambiguous or repeated clicks do not clearly change the screenshot, click the visible object on the stage/canvas instead of repeating the hierarchy click.
+- For procedural shapes like Ellipse or Rectangle, prefer selecting the parent shape object, not a child `Path`, when changing opacity, position, scale, size, or keyframes.
+- Only select a child `Path` when the task explicitly requires path/node editing or converting/editing vector points.
+- If the object to animate is much larger than the artboard or mostly outside it, scale it down to fit and center it before starting animation, unless the task explicitly requires an off-artboard position.
+- SVGs imported via the asset pipeline already have their origin at bottom-center (ideal for bounce/drop/jump). Do not attempt to move the origin with Freeze mode — it requires too much dexterity and is error-prone for the agent.
+- Before keyframing bounce, position, or scale changes, make sure the relevant artboard and moving object are fully visible on screen. If they are not clearly framed, use `F` first.
+- After switching to Animate mode with `Tab`, re-check the framing. If the timeline or Animate workspace changed what is visible, click a blank stage/artboard area if needed, then use `F` before continuing so the full motion area is back in view.
+- If the canvas is zoomed into a corner, the artboard is lost, or the relevant object is off-screen, use `F` as the first recovery action before manual zooming or panning.
+- If `F` frames the wrong selection, select the intended artboard or object and press `F` again instead of adjusting the zoom controls manually.
 - Keep agentic responses short because the user is watching the UI, not reading prose.
 
 Tool usage:
@@ -52,6 +68,8 @@ Output rules:
   <!--ACTION:{"type":"key","key":"k","modifiers":"meta","label":"Open search"}-->
 - For drag actions, use this exact shape:
   <!--ACTION:{"type":"drag","x1":40.0,"y1":35.0,"x2":55.0,"y2":48.0,"label":"Drag target"}-->
+- For hover actions (to reveal tooltips before clicking), use:
+  <!--ACTION:{"type":"hover","x":12.3,"y":45.6,"label":"Hover interpolation icon"}-->
 - Do not use XML tags like <ACTION>...</ACTION> or markdown code fences for structured output.
 - For actions, the field name must be `type`, never `action`.
 - For drag actions, use `x1`/`y1`/`x2`/`y2`, not `to_x`/`to_y`.
@@ -76,6 +94,7 @@ OUTPUT_CONTRACTS = {
         "When a shortcut is the default path, emit a key action like <!--ACTION:{\"type\":\"key\",\"key\":\"o\",\"label\":\"Select Ellipse tool\"}--> instead of clicking a toolbar icon.",
         "For drag actions, emit <!--ACTION:{\"type\":\"drag\",\"x1\":40.0,\"y1\":35.0,\"x2\":55.0,\"y2\":48.0,\"label\":\"Drag target\"}-->.",
         "Do not emit CURSOR tags.",
+        "IMPORTANT: Before emitting a new ACTION, first state in one sentence whether the previous action succeeded or failed based on the screenshot. If it failed, change strategy instead of repeating the same action.",
     ],
 }
 
@@ -111,15 +130,24 @@ PROCEDURE_CARDS = {
 - Mode shortcuts: Tab toggles Design/Animate, F zoom-to-fit, Cmd/Ctrl+K opens search.
 - For undo and grouping, use key actions with modifiers instead of toolbar clicks.""",
     "artboard-fit": """Finding or centering an artboard:
-- If the goal is to find, center, or recover a lost artboard, use `F` with a `key` action instead of panning manually.
+- If the goal is to find, center, or recover a lost artboard or off-screen object, use `F` with a `key` action instead of panning manually.
 - Preferred action: <!--ACTION:{"type":"key","key":"f","label":"Fit artboard to screen"}-->
 - `F` fits the active selection to the screen. If a child object is selected, it may fit that object instead of the artboard.
+- If `F` frames the wrong thing, change the selection, then press `F` again instead of manually changing the zoom level.
+- If you just switched to Animate mode and the wrong panel or control has focus, click a blank part of the stage/artboard first, then press `F`.
+- Before bounce, position, or scale keyframing, use `F` if the full motion area is not clearly visible.
 - If the artboard is already centered and visible, verify it and move on instead of repeating `F`.""",
     "shortcut-priority": """Shortcut-first action policy:
 - If a known Rive shortcut can complete the step, default to a `key` action instead of clicking a toolbar icon or menu.
 - Examples: <!--ACTION:{"type":"key","key":"o","label":"Select Ellipse tool"}-->, <!--ACTION:{"type":"key","key":"a","label":"Select Artboard tool"}-->, <!--ACTION:{"type":"key","key":"Tab","label":"Switch to Animate mode"}-->
 - Only click the toolbar or menus when no shortcut exists, the shortcut already failed, or the screenshot shows text-editing focus that would capture the key.
+- For Ellipse and Rectangle, a failed draw attempt does not count as the shortcut failing. Keep `O` or `R` as the default unless the screenshot clearly shows the wrong tool is active.
 - After selecting a tool by shortcut, the next action is usually on the stage or canvas, not on the toolbar again.""",
+    "shape-draw-recovery": """Basic shape draw recovery:
+- For Ellipse and Rectangle, keep using `O` or `R` even after a failed drag unless the screenshot clearly shows the wrong tool is active.
+- If the shape drag did not create anything, first make sure the artboard is active. Click the artboard or a blank area of the stage if needed, then press the shape shortcut again.
+- Retry the drag fully inside the visible artboard bounds instead of switching to the toolbar or create menu.
+- Only fall back to clicking the toolbar/menu for Ellipse or Rectangle if repeated screenshots clearly show that the shortcut did not activate the correct tool.""",
     "coordinate-sanity": """All coordinates must be viewport percentages from 0 to 100.
 - Left panel is usually x 0-14.
 - Inspector is usually x 86-100.
@@ -129,6 +157,49 @@ PROCEDURE_CARDS = {
 - Preferred: {"type":"type","x":92.5,"y":18.5,"text":"100","label":"Set width to 100"}
 - Do not click the field first, then send separate key events.
 - Never use Cmd+A/Ctrl+A to select text in the editor.""",
+    "opacity-editing": """Opacity editing:
+- Prefer the main layer/group opacity only when the whole object should fade.
+- Use fill opacity only when the step explicitly targets the fill appearance instead of the whole object.
+- After one opacity edit attempt, if the screenshot does not visibly change, do not keep bouncing between layer opacity and fill opacity fields.
+- Reassess whether the correct object is selected, whether a dialog is blocking the Inspector, or whether path-edit mode is still active.
+- If a modal or edit-mode control like "Done Editing" is visible, exit that mode before trying opacity again.""",
+    "selection-recovery": """Selection recovery:
+- Do not assume a hierarchy click worked unless the screenshot clearly changes.
+- Clear selection cues include stage handles/bounds, an obvious selected row highlight, or Inspector properties that match the intended object.
+- For imported SVGs and generic groups, clicking the visible object on the stage often selects the group more reliably than clicking a subtle hierarchy row.
+- If repeated hierarchy clicks do not visibly change selection, switch to clicking the object on the stage/canvas instead of trying the same hierarchy action again.
+- Before editing position, size, keyframes, or colors, verify the intended object is actually selected.""",
+    "shape-parent-selection": """Procedural shape parent selection:
+- When the hierarchy shows a parent procedural shape like `Ellipse` with a child `Path`, select the parent `Ellipse` for normal property edits.
+- Do not switch to the child `Path` when the goal is opacity, fill, stroke, scale, position, or keyframe changes on the whole shape.
+- Select the child `Path` only for true path editing, node manipulation, or when the task explicitly says to edit the path itself.
+- If controls like `Done Editing` or `Convert to Custom Path` appear unexpectedly, you likely selected the child path or entered edit mode. Exit that mode and reselect the parent shape.""",
+    "imported-asset-fit": """Imported asset fit and centering:
+- Imported SVGs often land much larger than the artboard.
+- Before animating an imported SVG or pasted asset, make sure the whole object fits inside the artboard and is visible.
+- If it is too large or mostly off-artboard, scale it down first, then center it in the artboard.
+- After fitting and centering the imported asset, use `F` if needed so the full artboard and object are clearly framed before keyframing.
+- If you later switch to Animate mode and the workspace changes the visible canvas area, use `F` again before editing keyframes.
+- Before animating, set the origin correctly for the animation type (see the animation-origin procedure card).
+- Do not start keyframing an imported asset until it is visibly placed and sized correctly.""",
+    "animation-framing": """Animation framing before keyframes:
+- Do not keyframe bounce, position, or scale changes while working partially off-screen or zoomed into one corner.
+- Before keyframing a moving object, make sure the full artboard and the object's travel path are clearly visible.
+- If the motion area is not fully visible, use `F` first. If `F` frames the wrong selection, select the artboard or animated object and press `F` again.
+- After pressing `Tab` into Animate mode, check the framing again. The animation workspace can hide part of the canvas, so click a blank stage/artboard area if needed, then use `F` before keyframing if anything is cropped or off-screen.
+- Avoid making keyframe judgments while effectively working blind.""",
+    "timeline-keyframe-navigation": """Timeline and keyframe navigation:
+- When easing or editing keys, prefer timeline shortcuts before drag-selecting the same region repeatedly.
+- Use `U` to reveal keys for the current selection.
+- Use Cmd/Ctrl + `,` or `.` to skip to keys on the selected row; without a selected row it skips through all keys.
+- Use `,` and `.` to move the playhead, and Alt/Option + `,` or `.` to move selected keys.
+- If drag-selecting keyframes does not clearly change the screenshot, stop repeating it and use `U` or skip-to-keys shortcuts instead.
+- After changing interpolation/easing once, verify the selection or interpolation UI actually changed before clicking the same easing control again.""",
+    "shadow-bounce": """Shadow setup for a bounce animation:
+- For a simple ground shadow, use Scale X, Scale Y, and opacity to sell the bounce. Do not use rotation unless the task explicitly asks for an angled or rotating shadow.
+- If the step says the shadow should be at minimum scale/opacity, edit Scale X/Y and opacity fields, not Rotation.
+- The usual pattern is: small and faint when the ball is high, larger and darker when the ball is low.
+- Verify you are editing the shadow ellipse itself before changing scale or opacity.""",
     "color-editing": """To change colors:
 - Select the object first.
 - Use the Inspector Fill or Stroke section on the right.
@@ -136,7 +207,8 @@ PROCEDURE_CARDS = {
     "mode-switching": """Rive has Design mode and Animate mode.
 - Design mode is for creating and styling shapes.
 - Animate mode is for timelines, keyframes, and state machines.
-- Use Tab when you need to switch modes quickly.""",
+- Use Tab when you need to switch modes quickly.
+- After switching into Animate mode, re-check the canvas framing. If the timeline/workspace causes the artboard or animated object to be partially hidden, click a blank stage/artboard area if needed, then use `F` before continuing.""",
     "rename-safety": """Rename safety:
 - Never rename timelines or state machines. That flow is too flaky and can cause loops.
 - If a step asks to rename a timeline or state machine, skip the rename portion and continue with the functional work, such as duration, inputs, transitions, or keyframes.
@@ -144,6 +216,7 @@ PROCEDURE_CARDS = {
     "keyframes": """Keyframe workflow:
 - Be in Animate mode.
 - Select a timeline.
+- If the canvas framing changed after switching modes, click blank stage if needed and use `F` before keyframing.
 - Move the playhead.
 - Change a property in the Inspector or on the stage.
 - Verify the keyframe was created before advancing.""",
@@ -156,6 +229,42 @@ PROCEDURE_CARDS = {
 - Select the state machine in the animations list.
 - Use the Inputs area to create Boolean, Number, or Trigger inputs.
 - Select a transition arrow, then add conditions in the Inspector.""",
+    "keyframe-selection": """Keyframe selection:
+- Keyframe diamonds on the timeline are very small targets. Do not click them directly unless you are certain of the exact coordinate.
+- Preferred method: Use `U` to reveal keys for the current property selection, then use Cmd/Ctrl + `,` or `.` to skip to the previous/next keyframe.
+- To select all keyframes on a row, click the row label area in the timeline, then use Cmd/Ctrl + A.
+- After selecting keyframes, verify the selection highlight in the timeline before applying easing or other changes.
+- If drag-selecting a keyframe region fails or is ambiguous, fall back to keyboard navigation with `U` and skip-to-keys shortcuts.
+- Never click blindly at small timeline targets more than once. If the first click does not visibly select a keyframe, switch to keyboard shortcuts.""",
+    "animation-origin": """Origin/pivot for imported SVGs:
+- SVGs imported via the asset pipeline already have their origin pre-set to BOTTOM-CENTER. This is ideal for bounce, drop, and jump animations — the object's base stays anchored to the ground/shadow contact point.
+- For scale or rotation animations that need a center origin, the agent only needs to drag the origin up by half the object's height — much shorter and easier than from the default top-left.
+- Do NOT attempt to move the origin using Freeze mode (`Y`). Dragging the origin arrows requires too much precision and is unreliable for the agent.
+- If the origin appears wrong after import, ask the user to reposition it manually rather than attempting Freeze mode.""",
+    "interpolation-selection": """Selecting interpolation/easing type:
+- Interpolation icons in the timeline/Inspector are small and have NO text labels. You cannot identify them by sight alone.
+- NEVER click an interpolation icon without first hovering to confirm its identity.
+- Required workflow:
+  1. First, select the keyframe(s) you want to change interpolation for.
+  2. Hover over the interpolation icon you think is correct using a hover action:
+     <!--ACTION:{"type":"hover","x":12.3,"y":45.6,"label":"Hover interpolation icon"}-->
+  3. Wait for the tooltip text to appear (the system adds a delay automatically).
+  4. In the next turn, read the tooltip text from the screenshot to confirm which interpolation type this icon represents (e.g., "Linear", "Cubic", "Hold", etc.).
+  5. If it is the correct type, click it. If not, hover the next icon instead.
+- Common interpolation types in Rive: Linear, Cubic (smooth ease), Hold (step/instant).
+- This hover-then-confirm pattern prevents accidentally setting the wrong easing, which is hard to notice and debug later.""",
+    "layout-safety": """Avoiding accidental Layout conversion:
+- Rive has Layout containers (Layout, Row, Column) that use flex rules to auto-arrange children. These are for responsive UI design, NOT for animation work.
+- NEVER press `Shift+L` during animation tasks — it wraps the selection in a Layout container.
+- NEVER click the "Layout selection" button in the Inspector unless the task explicitly requires a responsive layout.
+- NEVER right-click and select "Wrap in" > "Layout" on SVGs, shapes, or groups being animated.
+- If an object's name unexpectedly changes to "Column", "Row", or "Layout", or if children become distorted/rearranged, this means the object was accidentally wrapped in a Layout container. Immediately undo with Cmd/Ctrl+Z.
+- After undoing, verify the object's original name and visual appearance are restored before continuing.""",
+    "closing-keyframe": """Creating a closing/looping keyframe:
+- To close a loop (last keyframe matches the first), do NOT copy-paste the first keyframe. Paste is unreliable because it depends on playhead position, selection state, and panel focus.
+- Instead, move the playhead to the final frame, then manually set each property value in the Inspector to match the first keyframe's values.
+- You already know what the initial values are because you set them. Type them directly into the Inspector fields at the final frame position.
+- This is the same workflow used for every other keyframe and is always reliable.""",
 }
 
 
@@ -183,7 +292,18 @@ def build_runtime_package(
     task_active = bool(state.get("task:active"))
     effective_mode = task_mode if task_active else "ask"
     doc_hits = _lookup_runtime_docs(user_message, state)
-    doc_visuals = _select_doc_visuals(doc_hits, user_message, state)
+
+    # In agentic mode, cap doc hits to reduce token bloat — the agent is
+    # watching the live screenshot and rarely needs more than one doc reference.
+    if effective_mode == "agentic" and len(doc_hits) > 1:
+        doc_hits = doc_hits[:1]
+
+    # Skip doc visuals entirely in agentic mode to avoid sending large images
+    # every turn when common terms like "artboard" or "inspector" appear.
+    if effective_mode == "agentic":
+        doc_visuals: list[dict[str, Any]] = []
+    else:
+        doc_visuals = _select_doc_visuals(doc_hits, user_message, state)
 
     sections = [
         "[RUNTIME CONTEXT]",
@@ -363,12 +483,23 @@ def _is_generic_follow_up(text: str) -> bool:
 
 
 def _lookup_runtime_docs(user_message: str, state: dict[str, Any]) -> list[dict[str, Any]]:
+    queries = _build_doc_queries(user_message, state)
+    logger.debug("[doc-lookup] queries=%s", queries)
+
     merged: dict[str, dict[str, Any]] = {}
-    for priority, query in enumerate(_build_doc_queries(user_message, state)):
+    for priority, query in enumerate(queries):
+        cats = _preferred_categories(query)
         hits = search_rive_docs(
             query=query,
             limit=2,
-            preferred_categories=_preferred_categories(query),
+            preferred_categories=cats,
+        )
+        logger.debug(
+            "[doc-lookup] q=%d %r  cats=%s  hits=%s",
+            priority,
+            query,
+            cats,
+            [(h.get("path", "?"), round(float(h.get("score", 0)), 1)) for h in hits],
         )
         for hit in hits:
             adjusted_hit = dict(hit)
@@ -378,7 +509,12 @@ def _lookup_runtime_docs(user_message: str, state: dict[str, Any]) -> list[dict[
                 merged[adjusted_hit["path"]] = adjusted_hit
 
     ranked = sorted(merged.values(), key=lambda item: float(item.get("score", 0)), reverse=True)
-    return ranked[:3]
+    result = ranked[:3]
+    logger.debug(
+        "[doc-lookup] final=%s",
+        [(r.get("path", "?"), round(float(r.get("score", 0)), 1)) for r in result],
+    )
+    return result
 
 
 def _preferred_categories(query: str) -> list[str]:
@@ -484,16 +620,38 @@ def _select_procedure_cards(text: str, effective_mode: str) -> list[tuple[str, s
                 "fit to screen",
                 "zoom to fit",
                 "zoom-to-fit",
+                "zoomed in",
+                "zoomed into",
+                "off-screen",
+                "off screen",
+                "out of view",
+                "lost view",
+                "canvas is stuck",
+                "top right",
+                "corner",
             ),
         ),
         ("shape-creation", ("shape", "shapes", "circle", "ellipse", "rectangle", "procedural")),
+        ("shape-draw-recovery", ("draw shadow ellipse", "draw ellipse", "draw rectangle", "failed drag", "did not create", "didn't create", "shape did not appear", "artboard is active", "select ellipse tool", "select rectangle tool")),
         ("inspector-editing", ("width", "height", "opacity", "rotation", "inspector", "x ", " y", "position", "type")),
+        ("opacity-editing", ("opacity", "fill opacity", "layer opacity", "done editing", "convert to custom path", "path edit")),
+        ("shape-parent-selection", ("path", "child path", "done editing", "convert to custom path", "custom path", "path edit", "node editing", "vector points")),
+        ("selection-recovery", ("select", "selected", "selection", "group", "hierarchy", "svg", "imported asset", "imported svg")),
+        ("imported-asset-fit", ("svg", "import", "imported", "paste", "pasted", "asset", "off artboard", "too large", "too big", "not visible", "outside artboard", "center it", "scale down")),
+        ("animation-framing", ("bounce", "bouncing", "keyframe", "keyframes", "position", "travel path", "easing", "animate", "animation")),
+        ("timeline-keyframe-navigation", ("easing", "interpolation", "keyframe", "keyframes", "timeline", "reveal keys", "skip to keys", "move playhead", "selected keys")),
+        ("shadow-bounce", ("shadow", "shadow ellipse", "minimum scale", "minimum opacity", "scale x", "scale y", "bounce shadow")),
         ("color-editing", ("fill", "stroke", "color", "hex", "swatch")),
         ("state-machine-transitions", ("transition", "connector", "any state", "entry", "exit")),
         ("state-machine-inputs", ("input", "condition", "boolean", "trigger", "number")),
         ("keyframes", ("keyframe", "playhead", "timeline", "animation")),
         ("mode-switching", ("animate mode", "design mode", "switch mode", "toggle mode", "tab")),
         ("rename-safety", ("rename", "renaming", "doubleclick", "editable text", "timeline 1", "state machine")),
+        ("keyframe-selection", ("keyframe", "keyframes", "select keyframe", "select keyframes", "select key", "select keys", "easing", "interpolation", "diamond", "drag-select")),
+        ("closing-keyframe", ("loop", "looping", "closing keyframe", "final keyframe", "last keyframe", "end keyframe", "match first", "copy keyframe", "paste keyframe", "same as first", "return to", "back to original", "reset position")),
+        ("layout-safety", ("layout", "column", "row", "wrap in", "distorted", "rearranged", "shift+l")),
+        ("interpolation-selection", ("interpolation", "easing", "cubic", "linear", "hold", "ease in", "ease out", "smooth")),
+        ("animation-origin", ("origin", "pivot", "anchor", "bounce", "drop", "jump", "swing", "pendulum", "spin", "import", "imported", "svg", "animate", "animation")),
     ]
 
     scored_matches: list[tuple[int, str]] = []
@@ -570,16 +728,12 @@ def _select_doc_visuals(
     likely_visual = any(
         term in reference_text
         for term in (
-            "artboard",
-            "fill",
-            "stroke",
-            "color",
             "gradient",
-            "inspector",
-            "dropdown",
-            "button",
-            "list",
             "converter",
+            "blend mode",
+            "mesh",
+            "joystick",
+            "constraints",
         )
     )
 

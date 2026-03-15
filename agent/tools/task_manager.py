@@ -10,6 +10,23 @@ from google.adk.tools import ToolContext
 
 BLOCKED_RENAME_TARGETS = ("timeline", "state machine", "state-machine", "statemachine")
 RENAME_TERMS = ("rename", "renaming", "renamed")
+IMPORTED_ASSET_TERMS = ("svg", "import", "imported", "paste", "pasted", "asset")
+FIT_CENTER_TERMS = ("scale down", "resize", "fit inside", "fit within", "center", "centre")
+ANIMATION_STEP_TERMS = (
+    "animate",
+    "animation",
+    "keyframe",
+    "playhead",
+    "timeline",
+    "bounce",
+    "move",
+    "position",
+    "rotation",
+    "opacity",
+)
+IMPORTED_ASSET_FIT_STEP = (
+    "Scale the imported SVG down so it fits fully inside the artboard, center it, and press F so the full artboard and asset are clearly framed before animating. After switching to Animate mode, press F again if the workspace changed the visible canvas area."
+)
 
 
 def start_task(
@@ -44,7 +61,7 @@ def start_task(
     if not steps or len(steps) == 0:
         return {"status": "error", "message": "Task must have at least one step"}
 
-    sanitized_steps, skipped_steps = _sanitize_task_steps(steps)
+    sanitized_steps, skipped_steps = _sanitize_task_steps(task_name, steps)
     if not sanitized_steps:
         return {
             "status": "error",
@@ -244,7 +261,7 @@ def verify_step(
         }
 
 
-def _sanitize_task_steps(steps: list[str]) -> tuple[list[str], list[str]]:
+def _sanitize_task_steps(task_name: str, steps: list[str]) -> tuple[list[str], list[str]]:
     sanitized: list[str] = []
     skipped: list[str] = []
 
@@ -255,7 +272,39 @@ def _sanitize_task_steps(steps: list[str]) -> tuple[list[str], list[str]]:
         else:
             skipped.append(step)
 
+    sanitized = _inject_imported_asset_fit_step(task_name, sanitized)
     return sanitized, skipped
+
+
+def _inject_imported_asset_fit_step(task_name: str, steps: list[str]) -> list[str]:
+    if not steps:
+        return steps
+
+    combined = " ".join([task_name, *steps]).lower()
+    if not any(term in combined for term in IMPORTED_ASSET_TERMS):
+        return steps
+
+    if any(any(term in step.lower() for term in FIT_CENTER_TERMS) for step in steps):
+        return steps
+
+    insert_index = None
+    for index, step in enumerate(steps):
+        lowered = step.lower()
+        if any(term in lowered for term in IMPORTED_ASSET_TERMS):
+            insert_index = index + 1
+            break
+
+    if insert_index is None:
+        for index, step in enumerate(steps):
+            lowered = step.lower()
+            if any(term in lowered for term in ANIMATION_STEP_TERMS):
+                insert_index = index
+                break
+
+    if insert_index is None:
+        insert_index = 0
+
+    return steps[:insert_index] + [IMPORTED_ASSET_FIT_STEP] + steps[insert_index:]
 
 
 def _rewrite_or_drop_blocked_step(step: str) -> str | None:

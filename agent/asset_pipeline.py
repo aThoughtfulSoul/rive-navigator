@@ -54,6 +54,7 @@ BACKGROUND_OPAQUE_ALPHA = 224
 BACKGROUND_EDGE_RATIO_THRESHOLD = 0.55
 BACKGROUND_CORNER_MATCH_THRESHOLD = 3
 MIN_BACKGROUND_REMOVAL_RATIO = 0.04
+CROP_PADDING_PX = 12
 
 
 class AssetPipelineError(RuntimeError):
@@ -296,6 +297,7 @@ def _prepare_trace_input(preview_path: Path, asset_dir: Path) -> tuple[Path, dic
     cleanup: dict[str, Any] = {
         "used_cleaned_preview": False,
         "background_removed": False,
+        "cropped_to_content": False,
         "reason": "not_needed",
         "trace_input_filename": preview_path.name,
     }
@@ -320,8 +322,23 @@ def _prepare_trace_input(preview_path: Path, asset_dir: Path) -> tuple[Path, dic
         }
     )
     if not detection["should_remove"] or detection["color"] is None:
-        cleanup["reason"] = "background_not_detected"
-        return preview_path, cleanup
+        cropped_image, crop_box = _crop_to_content_bounds(image, padding=CROP_PADDING_PX)
+        if cropped_image is None:
+            cleanup["reason"] = "background_not_detected"
+            return preview_path, cleanup
+
+        cropped_path = asset_dir / "preview_trace.png"
+        cropped_image.save(cropped_path)
+        cleanup.update(
+            {
+                "used_cleaned_preview": True,
+                "cropped_to_content": True,
+                "reason": "cropped_existing_alpha",
+                "trace_input_filename": cropped_path.name,
+                "crop_box": list(crop_box),
+            }
+        )
+        return cropped_path, cleanup
 
     cleaned_image, removed_pixels = _erase_edge_connected_background(
         image=image,
@@ -338,16 +355,25 @@ def _prepare_trace_input(preview_path: Path, asset_dir: Path) -> tuple[Path, dic
         cleanup["reason"] = "cleanup_removed_everything"
         return preview_path, cleanup
 
+    trace_image = cleaned_image
+    crop_box = None
+    cropped_image, crop_box = _crop_to_content_bounds(cleaned_image, padding=CROP_PADDING_PX)
+    if cropped_image is not None:
+        trace_image = cropped_image
+
     cleaned_path = asset_dir / "preview_trace.png"
-    cleaned_image.save(cleaned_path)
+    trace_image.save(cleaned_path)
     cleanup.update(
         {
             "used_cleaned_preview": True,
             "background_removed": True,
-            "reason": "background_removed",
+            "cropped_to_content": cropped_image is not None,
+            "reason": "background_removed_and_cropped" if cropped_image is not None else "background_removed",
             "trace_input_filename": cleaned_path.name,
         }
     )
+    if crop_box is not None:
+        cleanup["crop_box"] = list(crop_box)
     return cleaned_path, cleanup
 
 
@@ -454,6 +480,25 @@ def _rgb_close(left: tuple[int, int, int], right: tuple[int, int, int], toleranc
     return all(abs(left[index] - right[index]) <= tolerance for index in range(3))
 
 
+def _crop_to_content_bounds(image, padding: int):
+    alpha = image.getchannel("A")
+    bbox = alpha.getbbox()
+    if bbox is None:
+        return None, None
+
+    left, top, right, bottom = bbox
+    if left <= 0 and top <= 0 and right >= image.width and bottom >= image.height:
+        return None, None
+
+    crop_box = (
+        max(0, left - padding),
+        max(0, top - padding),
+        min(image.width, right + padding),
+        min(image.height, bottom + padding),
+    )
+    return image.crop(crop_box), crop_box
+
+
 def _iter_border_points(width: int, height: int):
     if width <= 0 or height <= 0:
         return
@@ -496,7 +541,10 @@ def _asset_dir(asset_id: str) -> Path:
     asset_id = (asset_id or "").strip()
     if not asset_id:
         raise AssetNotFoundError("Missing asset_id.")
-    return ASSET_ROOT / asset_id
+    resolved = (ASSET_ROOT / asset_id).resolve()
+    if not str(resolved).startswith(str(ASSET_ROOT.resolve())):
+        raise AssetNotFoundError("Invalid asset_id.")
+    return resolved
 
 
 def _read_metadata(asset_dir: Path) -> dict[str, Any]:

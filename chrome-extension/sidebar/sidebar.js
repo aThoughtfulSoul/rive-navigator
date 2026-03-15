@@ -40,6 +40,8 @@ const state = {
   lastActionLabel: "",
   repeatCount: 0,
   MAX_REPEATS: 2,
+  actionFamilyHistory: [],
+  MAX_ACTION_FAMILY_HISTORY: 6,
   invalidActionRecoveries: 0,
   MAX_INVALID_ACTION_RECOVERIES: 2,
   // Audio narration
@@ -386,19 +388,23 @@ async function sendToAgentDirect(message, screenshot) {
   syncModelFromUI();
   const agentApiUrl = await getAgentApiUrl();
 
-  const response = await fetch(`${agentApiUrl}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      message: message,
-      screenshot: screenshot,
-      dom_context: null,
-      session_id: state.sessionId,
-      user_id: "extension_user",
-      task_mode: state.taskMode,
-      model: state.modelName,
-    }),
-  });
+  const response = await fetchWithTimeout(
+    `${agentApiUrl}/api/chat`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: message,
+        screenshot: screenshot,
+        dom_context: null,
+        session_id: state.sessionId,
+        user_id: "extension_user",
+        task_mode: state.taskMode,
+        model: state.modelName,
+      }),
+    },
+    120000 // 2-minute timeout for LLM + screenshot processing
+  );
 
   if (!response.ok) {
     throw new Error(`API error: ${response.status}`);
@@ -686,8 +692,36 @@ async function executeAgentAction(action) {
     return;
   }
 
+  if (isSemanticActionLoop(action)) {
+    console.warn(`[Sidebar] Semantic loop detected for action family: ${getActionFamily(action)}`);
+    state.actionFamilyHistory = [];
+    state.lastActionLabel = "";
+    state.repeatCount = 0;
+    setLoading(true);
+    const screenshot = await captureScreenshotSilent();
+    let stuckMsg =
+      `[STUCK: The recent actions are looping around the same problem without changing the screenshot. ` +
+      `Stop cycling between selection clicks, opacity fields, or edit-mode controls. Reassess what is blocking this step.]`;
+    if (getActionFamily(action) === "opacity") {
+      stuckMsg +=
+        " Do not keep switching between layer opacity and fill opacity. Verify the correct object is selected, exit any active edit mode or blocking dialog, then make one targeted opacity change.";
+    }
+    const result = await sendToAgent(stuckMsg, screenshot);
+    setLoading(false);
+    if (result.task_state) updateTaskBar(result.task_state);
+    addMessage("agent", result.response || "Trying a different approach...");
+    narrate(result.response || "");
+    if (await maybeContinueAgenticLoop(result)) {
+      return;
+    } else {
+      state.executing = false;
+      updateExecutionStatus(null);
+    }
+    return;
+  }
+
   // Stuck detection: if same action repeats, tell agent to try differently
-  const actionKey = `${action.type}:${action.label || ""}:${action.x || ""}:${action.y || ""}`;
+  const actionKey = buildActionKey(action);
   if (actionKey === state.lastActionLabel) {
     state.repeatCount++;
     if (state.repeatCount >= state.MAX_REPEATS) {
@@ -697,10 +731,14 @@ async function executeAgentAction(action) {
       state.lastActionLabel = "";
       setLoading(true);
       const screenshot = await captureScreenshotSilent();
-      const stuckMsg =
+      let stuckMsg =
         `[STUCK: The action "${action.label}" has been attempted ${state.MAX_REPEATS} times without success. ` +
         `The click target is likely wrong. Try a DIFFERENT approach — use a keyboard shortcut instead of clicking, ` +
         `or click a different location. Do NOT repeat the same action.]`;
+      if (isSelectionLikeAction(action)) {
+        stuckMsg +=
+          " If hierarchy selection is ambiguous, click the visible object on the stage/canvas instead and verify that handles or Inspector properties changed before continuing.";
+      }
       const result = await sendToAgent(stuckMsg, screenshot);
       setLoading(false);
       if (result.task_state) updateTaskBar(result.task_state);
@@ -718,6 +756,8 @@ async function executeAgentAction(action) {
     state.lastActionLabel = actionKey;
     state.repeatCount = 0;
   }
+
+  recordActionFamily(action);
 
   state.executing = true;
   updateExecutionStatus(`Executing: ${action.label || action.type}...`);
@@ -757,14 +797,38 @@ async function executeAgentAction(action) {
       return;
     }
 
+    // Re-check pause before spending an LLM call on verification
+    if (state.executionPaused || !state.task.active) {
+      state.executing = false;
+      updateExecutionStatus(state.executionPaused ? "Paused" : null);
+      return;
+    }
+
     // Send verification message to agent with screenshot
     updateExecutionStatus("Agent analyzing...");
     setLoading(true);
 
-    const verifyMessage = `[Executed: ${action.label || action.type}] Here is the result.`;
+    const verifyMessage =
+      `[Executed: ${action.label || action.type}] ` +
+      `Examine the screenshot carefully. ` +
+      `State whether the action succeeded or failed. ` +
+      `If it failed or the UI did not change as expected, choose a DIFFERENT strategy. ` +
+      `If it succeeded, proceed to the next step.`;
     const agentResult = await sendToAgent(verifyMessage, screenshot);
 
     setLoading(false);
+
+    // Check pause again after the (potentially long) LLM call returns
+    if (state.executionPaused || !state.task.active) {
+      if (agentResult.task_state) {
+        updateTaskBar(agentResult.task_state);
+      }
+      addMessage("agent", agentResult.response || "No response.");
+      narrate(agentResult.response || "");
+      state.executing = false;
+      updateExecutionStatus(state.executionPaused ? "Paused" : null);
+      return;
+    }
 
     if (agentResult.task_state) {
       updateTaskBar(agentResult.task_state);
@@ -989,6 +1053,81 @@ function syncTaskModeFromUI() {
 function syncModelFromUI() {
   if (!proModel) return;
   state.modelName = proModel.checked ? PRO_MODEL_NAME : FLASH_MODEL_NAME;
+}
+
+function normalizeActionLabel(label) {
+  return String(label || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/\bdouble-?click\b/g, "click")
+    .trim();
+}
+
+function roundedCoord(value) {
+  if (typeof value !== "number" || Number.isNaN(value)) return "";
+  return Math.round(value / 4) * 4;
+}
+
+function buildActionKey(action) {
+  const normalizedLabel = normalizeActionLabel(action.label);
+  if (normalizedLabel) {
+    return `${action.type}:${normalizedLabel}`;
+  }
+
+  if (action.type === "drag") {
+    return [
+      action.type,
+      roundedCoord(action.x1),
+      roundedCoord(action.y1),
+      roundedCoord(action.x2),
+      roundedCoord(action.y2),
+    ].join(":");
+  }
+
+  return [
+    action.type,
+    roundedCoord(action.x),
+    roundedCoord(action.y),
+    action.text || "",
+    action.key || "",
+  ].join(":");
+}
+
+function isSelectionLikeAction(action) {
+  const text = `${action.type} ${action.label || ""}`.toLowerCase();
+  return /(select|selection|group|hierarchy|layer|object|svg)/.test(text);
+}
+
+function getActionFamily(action) {
+  const text = `${action.type} ${action.label || ""} ${action.text || ""}`.toLowerCase();
+  if (/opacity/.test(text)) return "opacity";
+  if (/(select|selection|group|hierarchy|layer|object|ellipse|shadow)/.test(text)) return "selection";
+  if (/(done editing|convert to custom path|path edit|editing)/.test(text)) return "edit-mode";
+  if (action.type === "type") return "inspector-type";
+  return action.type;
+}
+
+function recordActionFamily(action) {
+  state.actionFamilyHistory.push(getActionFamily(action));
+  if (state.actionFamilyHistory.length > state.MAX_ACTION_FAMILY_HISTORY) {
+    state.actionFamilyHistory.shift();
+  }
+}
+
+function isSemanticActionLoop(action) {
+  const family = getActionFamily(action);
+  const recent = state.actionFamilyHistory.slice(-4);
+
+  if (family === "opacity") {
+    const allowed = new Set(["opacity", "selection", "edit-mode", "inspector-type"]);
+    return recent.length >= 3 && recent.every((entry) => allowed.has(entry));
+  }
+
+  if (family === "selection") {
+    return recent.length >= 3 && recent.every((entry) => entry === "selection" || entry === "opacity");
+  }
+
+  return false;
 }
 
 function initializeTaskMode() {
@@ -1246,6 +1385,27 @@ async function toggleVoiceInput() {
 
 // Listen for voice results relayed from the content script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Ctrl+Space from the Rive page — pause/resume agentic loop if running,
+  // otherwise fall through to let the content script start push-to-talk.
+  if (message.type === "CTRL_SPACE") {
+    if (state.taskMode === "agentic" && state.executing) {
+      if (state.executionPaused) {
+        state.executionPaused = false;
+        pauseBtn.textContent = "Pause";
+        resumeAgenticLoop();
+      } else {
+        state.executionPaused = true;
+        pauseBtn.textContent = "Resume";
+        updateExecutionStatus("Paused — Ctrl+Space or click Resume to continue");
+      }
+      sendResponse({ agentPaused: state.executionPaused });
+      return;
+    }
+    // Not in agentic execution — let content script handle as push-to-talk
+    sendResponse({});
+    return;
+  }
+
   // Push-to-talk started from the Rive page via Ctrl+Space
   if (message.type === "PUSH_TO_TALK_START") {
     isRecording = true;

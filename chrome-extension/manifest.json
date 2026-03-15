@@ -12,8 +12,6 @@
     "storage"
   ],
   "host_permissions": [
-    "https://rive.app/*",
-    "https://editor.rive.app/*",
     "<all_urls>"
   ],
   "side_panel": {

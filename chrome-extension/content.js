@@ -198,10 +198,15 @@ document.addEventListener(
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && cursorOverlay) hideCursor();
 
-  // Push-to-talk: Ctrl+Space (hold to record, release to send)
+  // Ctrl+Space: pause agentic loop if running, otherwise push-to-talk
   if (e.code === "Space" && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
     e.preventDefault();
-    startPushToTalk("page");
+    chrome.runtime.sendMessage({ type: "CTRL_SPACE" }, (response) => {
+      // If the sidebar toggled pause on the agentic loop, skip voice recording.
+      if (response && response.agentPaused !== undefined) return;
+      // Otherwise, start push-to-talk as normal.
+      startPushToTalk("page");
+    });
   }
 });
 

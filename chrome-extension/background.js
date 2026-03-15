@@ -634,23 +634,53 @@ async function cdpType(tabId, action, viewport) {
 
   // Step 2: Clear existing text ONLY if a text input is actually focused.
   // Flutter Web creates a hidden <input> element when editing text fields.
-  // We check document.activeElement to verify — if it's INPUT/TEXTAREA, Backspace is safe.
-  // If nothing is focused (click missed the field), we skip Backspace to avoid deleting canvas objects.
+  // The hidden input may live inside a shadow DOM (e.g. inside <flt-glass-pane>),
+  // so we walk activeElement through shadow roots to find the real focused element.
   let textFieldFocused = false;
   try {
     const focusCheck = await chrome.debugger.sendCommand({ tabId }, "Runtime.evaluate", {
-      expression: "document.activeElement ? document.activeElement.tagName : 'NONE'",
+      expression: `(function() {
+        let el = document.activeElement;
+        while (el && el.shadowRoot && el.shadowRoot.activeElement) {
+          el = el.shadowRoot.activeElement;
+        }
+        return el ? el.tagName : 'NONE';
+      })()`,
       returnByValue: true,
     });
     const activeTag = (focusCheck?.result?.value || "NONE").toUpperCase();
     textFieldFocused = (activeTag === "INPUT" || activeTag === "TEXTAREA");
-    console.log(`[Background] CDP Type: activeElement = ${activeTag}, textFieldFocused = ${textFieldFocused}`);
+    console.log(`[Background] CDP Type: deepActiveElement = ${activeTag}, textFieldFocused = ${textFieldFocused}`);
   } catch (e) {
     console.warn(`[Background] CDP Type: could not check activeElement: ${e.message}`);
   }
 
   if (textFieldFocused) {
-    // Safe to clear — Backspace only affects the focused text field
+    // Belt-and-suspenders: Cmd/Ctrl+A inside the focused input to ensure ALL
+    // text is selected, even if the triple-click only partially selected.
+    // This is safe because Cmd+A inside a focused <input> selects its text,
+    // NOT canvas objects.
+    const platform = await chrome.runtime.getPlatformInfo();
+    const selectAllModifiers = platform.os === "mac" ? 4 : 2; // 4 = Meta (Cmd), 2 = Ctrl
+    await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
+      type: "keyDown",
+      key: "a",
+      code: "KeyA",
+      windowsVirtualKeyCode: 65,
+      nativeVirtualKeyCode: 65,
+      modifiers: selectAllModifiers,
+    });
+    await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
+      type: "keyUp",
+      key: "a",
+      code: "KeyA",
+      windowsVirtualKeyCode: 65,
+      nativeVirtualKeyCode: 65,
+      modifiers: selectAllModifiers,
+    });
+    await sleep(30);
+
+    // Now delete the fully-selected text
     await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
       type: "keyDown",
       key: "Backspace",
@@ -667,7 +697,7 @@ async function cdpType(tabId, action, viewport) {
     });
     await sleep(50);
   } else {
-    console.log(`[Background] CDP Type: No text field focused — skipping Backspace (safety)`);
+    console.log(`[Background] CDP Type: No text field focused — skipping clear (safety)`);
   }
 
   // Step 3: Insert text via Input.insertText

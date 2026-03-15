@@ -20,6 +20,7 @@ DROP_ATTRS = {
     "font-family",
     "font-size",
 }
+DROP_ATTR_PREFIXES = ("on",)
 COMPLEXITY_LIMITS = {
     "path_count": 320,
     "element_count": 700,
@@ -72,6 +73,8 @@ def sanitize_svg_document(raw_svg: str) -> tuple[str, dict[str, Any]]:
             "Try a simpler, flatter asset prompt."
         )
 
+    origin_shifted = _set_origin_bottom_center(root)
+
     svg_text = ET.tostring(root, encoding="unicode")
     stats = {
         "path_count": path_count,
@@ -79,6 +82,7 @@ def sanitize_svg_document(raw_svg: str) -> tuple[str, dict[str, Any]]:
         "removed_tags": removed_tags,
         "removed_attributes": removed_attrs,
         "view_box": root.attrib.get("viewBox", ""),
+        "origin_bottom_center": origin_shifted,
     }
     return svg_text, stats
 
@@ -100,6 +104,11 @@ def _sanitize_attributes(element: ET.Element, is_root: bool = False) -> int:
         attr_value = element.attrib.get(attr_name, "")
 
         if local_name in DROP_ATTRS:
+            element.attrib.pop(attr_name, None)
+            removed += 1
+            continue
+
+        if any(local_name.lower().startswith(prefix) for prefix in DROP_ATTR_PREFIXES):
             element.attrib.pop(attr_name, None)
             removed += 1
             continue
@@ -133,6 +142,64 @@ def _ensure_viewbox(root: ET.Element) -> None:
         root.attrib["height"] = "1024"
 
     root.attrib["viewBox"] = f"0 0 {_format_number(width)} {_format_number(height)}"
+
+
+def _set_origin_bottom_center(root: ET.Element) -> bool:
+    """Shift SVG content so (0,0) is at the bottom-centre of the artwork.
+
+    When Rive imports an SVG it places the object origin at the SVG
+    coordinate (0, 0).  By default vtracer produces a viewBox starting at
+    ``0 0 W H``, putting the origin at the top-left corner.  This helper
+    rewrites the coordinate system so the origin lands at bottom-centre,
+    which is the ideal pivot for the most common animation type (bounce /
+    drop / jump).  For scale or rotation the agent only needs to drag
+    the origin up by half the height — much shorter than from top-left.
+
+    1. Wrap every direct child of ``<svg>`` in a
+       ``<g transform="translate(-W/2, -H)">``.
+    2. Update the viewBox to ``-W/2 -H W H``.
+
+    The visual output is unchanged — only the coordinate system moves.
+    Returns ``True`` when the shift was applied.
+    """
+    view_box = root.attrib.get("viewBox", "")
+    parts = view_box.split()
+    if len(parts) != 4:
+        return False
+
+    try:
+        vb_x, vb_y, vb_w, vb_h = (float(p) for p in parts)
+    except ValueError:
+        return False
+
+    if vb_w <= 0 or vb_h <= 0:
+        return False
+
+    # Shift so (0,0) lands at bottom-centre of the visible area.
+    dx = -(vb_x + vb_w / 2.0)
+    dy = -(vb_y + vb_h)
+
+    if abs(dx) < 0.001 and abs(dy) < 0.001:
+        return False
+
+    # Wrap all direct children in a <g> that applies the offset.
+    wrapper = ET.SubElement(root, f"{{{SVG_NS}}}g")
+    wrapper.set("transform", f"translate({_format_number(dx)},{_format_number(dy)})")
+
+    children = list(root)
+    for child in children:
+        if child is wrapper:
+            continue
+        root.remove(child)
+        wrapper.append(child)
+
+    # Update the viewBox so the visible area matches the new coordinate
+    # system.
+    new_x = _format_number(vb_x + dx)
+    new_y = _format_number(vb_y + dy)
+    root.attrib["viewBox"] = f"{new_x} {new_y} {_format_number(vb_w)} {_format_number(vb_h)}"
+
+    return True
 
 
 def _parse_svg_length(value: str | None) -> float | None:

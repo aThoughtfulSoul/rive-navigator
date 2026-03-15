@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import mimetypes
 import re
+import threading
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -76,64 +77,70 @@ TERM_ALIASES = {
 }
 
 _docs_index: list[dict[str, Any]] = []
+_docs_index_lock = threading.Lock()
 
 
 def _build_docs_index() -> list[dict[str, Any]]:
-    """Builds a cached in-memory index of all markdown docs."""
+    """Builds a cached in-memory index of all markdown docs (thread-safe)."""
     global _docs_index
     if _docs_index:
         return _docs_index
 
-    docs_path = RIVE_DOCS_PATH
-    if not docs_path.exists():
-        return []
+    with _docs_index_lock:
+        # Double-check after acquiring lock
+        if _docs_index:
+            return _docs_index
 
-    for filepath in sorted(docs_path.rglob("*")):
-        if not filepath.is_file() or filepath.suffix not in {".mdx", ".md"}:
-            continue
-        if filepath.name in {"README.md", "CONTRIBUTING.md"}:
-            continue
+        docs_path = RIVE_DOCS_PATH
+        if not docs_path.exists():
+            return []
 
-        try:
-            content = filepath.read_text(encoding="utf-8", errors="ignore")
-        except Exception:
-            continue
+        for filepath in sorted(docs_path.rglob("*")):
+            if not filepath.is_file() or filepath.suffix not in {".mdx", ".md"}:
+                continue
+            if filepath.name in {"README.md", "CONTRIBUTING.md"}:
+                continue
 
-        meta = _parse_metadata(content)
-        rel_path = str(filepath.relative_to(docs_path))
-        category = rel_path.split("/")[0] if "/" in rel_path else "general"
-        headings = re.findall(r"^#+\s+(.+)$", content, re.MULTILINE)
-        sections = _extract_sections(content, rel_path)
-        search_content = "\n\n".join(
-            section["search_text"] for section in sections if section.get("search_text")
-        ).strip() or _normalize_search_content(content)
-        image_refs = _extract_image_refs(content, rel_path, meta["title"])
-        visual_dependency = _estimate_visual_dependency(
-            image_count=len(image_refs),
-            search_text=search_content,
-            steps=[step for section in sections for step in section.get("steps", [])],
-        )
+            try:
+                content = filepath.read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                continue
 
-        _docs_index.append(
-            {
-                "path": rel_path,
-                "category": category,
-                "title": meta["title"],
-                "description": meta["description"],
-                "headings": headings,
-                "content": content,
-                "search_content": search_content,
-                "sections": sections,
-                "image_refs": image_refs,
-                "visual_dependency": visual_dependency,
-                "path_lower": rel_path.lower(),
-                "title_lower": meta["title"].lower(),
-                "description_lower": meta["description"].lower(),
-                "headings_lower": [heading.lower() for heading in headings],
-            }
-        )
+            meta = _parse_metadata(content)
+            rel_path = str(filepath.relative_to(docs_path))
+            category = rel_path.split("/")[0] if "/" in rel_path else "general"
+            headings = re.findall(r"^#+\s+(.+)$", content, re.MULTILINE)
+            sections = _extract_sections(content, rel_path)
+            search_content = "\n\n".join(
+                section["search_text"] for section in sections if section.get("search_text")
+            ).strip() or _normalize_search_content(content)
+            image_refs = _extract_image_refs(content, rel_path, meta["title"])
+            visual_dependency = _estimate_visual_dependency(
+                image_count=len(image_refs),
+                search_text=search_content,
+                steps=[step for section in sections for step in section.get("steps", [])],
+            )
 
-    return _docs_index
+            _docs_index.append(
+                {
+                    "path": rel_path,
+                    "category": category,
+                    "title": meta["title"],
+                    "description": meta["description"],
+                    "headings": headings,
+                    "content": content,
+                    "search_content": search_content,
+                    "sections": sections,
+                    "image_refs": image_refs,
+                    "visual_dependency": visual_dependency,
+                    "path_lower": rel_path.lower(),
+                    "title_lower": meta["title"].lower(),
+                    "description_lower": meta["description"].lower(),
+                    "headings_lower": [heading.lower() for heading in headings],
+                }
+            )
+
+        return _docs_index
 
 
 def search_rive_docs(
@@ -380,6 +387,16 @@ def _score_doc(
             score += 14.0
         if "keyboard-shortcuts" in path:
             score += 8.0
+    if query_set & {"keyframe", "keyframes", "timeline", "animation", "easing"}:
+        if "animate-mode" in path or "timeline" in path:
+            score += 12.0
+    if query_set & {"state", "machine", "transition", "input", "inputs"}:
+        if "state-machine" in path:
+            score += 12.0
+    if query_set & {"listener", "listeners", "event", "events"}:
+        if "listeners" in path or "events" in path:
+            score += 10.0
+
     if "keyboard-shortcuts" in path:
         score += _shortcut_relevance(query_terms, phrase)
 
