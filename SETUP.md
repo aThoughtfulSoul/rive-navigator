@@ -255,15 +255,8 @@ This is for the hackathon submission. Do this last, once everything works locall
 # Make sure gcloud CLI is installed and authenticated
 # https://cloud.google.com/sdk/docs/install
 
-# Set your project
-gcloud config set project YOUR_PROJECT_ID
-
-# Deploy to Cloud Run
-gcloud run deploy rive-navigator \
-  --source . \
-  --region us-central1 \
-  --allow-unauthenticated \
-  --set-env-vars "GOOGLE_API_KEY=your_key_here"
+# One-command deploy:
+GOOGLE_API_KEY=your_key GCP_PROJECT_ID=your-project-id ./deploy.sh
 ```
 
 After deploying, you'll get a URL like `https://rive-navigator-xxxxx.run.app`.
